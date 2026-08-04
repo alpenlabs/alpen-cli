@@ -134,7 +134,7 @@ pub async fn recover(
 /// see [`bridge_in_descriptor`]) to `l1w`, signing and broadcasting the spend.
 async fn drain_recovery_path(
     recovery_wallet: &mut Wallet,
-    l1w: &mut Wallet,
+    l1w: &mut BitcoinWallet,
     settings: &Settings,
     fee_rate: FeeRate,
 ) -> Result<(), DisplayedError> {
@@ -143,6 +143,8 @@ async fn drain_recovery_path(
     });
 
     let recover_to = l1w.reveal_next_address(KeychainKind::External).address;
+    l1w.persist()
+        .internal_error("Failed to persist Bitcoin wallet")?;
     println!(
         "Recovering to wallet address {}",
         recover_to.to_string().yellow()
@@ -309,7 +311,7 @@ pub(crate) async fn reconstruct_reclaim_counter(
 async fn recover_from_seed(
     seed: &Seed,
     settings: &Settings,
-    l1w: &mut Wallet,
+    l1w: &mut BitcoinWallet,
     fee_rate: FeeRate,
     drained_recovery_scripts: &HashSet<ScriptBuf>,
 ) -> Result<Option<u32>, DisplayedError> {
