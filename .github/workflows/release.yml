@@ -131,50 +131,54 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: cargo build --release --locked --bin alpen --target "${TARGET}"
 
-      - name: Verify static linkage
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+      - name: Verify release binary
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           binary="target/${TARGET}/release/alpen"
+          if [[ "${TARGET}" == *-windows-gnu ]]; then
+            binary="${binary}.exe"
+          fi
           file "${binary}"
-          if readelf --dynamic "${binary}" | grep --quiet '(NEEDED)'; then
+          if [[ "${TARGET}" == *-linux-musl ]] && readelf --dynamic "${binary}" | grep --quiet '(NEEDED)'; then
             echo "Linux release binary has dynamic library dependencies" >&2
             exit 1
           fi
 
-      - name: Create tar.gz archive
-        if: matrix.archive == 'tar.gz'
+      - name: Create release archive
         shell: bash
         env:
+          ARCHIVE: ${{ matrix.archive }}
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           package="alpen-cli-v${RELEASE_VERSION}-${TARGET}"
+          binary_name="alpen"
+          if [[ "${TARGET}" == *-windows-gnu ]]; then
+            binary_name="alpen.exe"
+          fi
           mkdir -p "dist/${package}"
-          install -m 0755 "target/${TARGET}/release/alpen" "dist/${package}/alpen"
+          install -m 0755 "target/${TARGET}/release/${binary_name}" "dist/${package}/${binary_name}"
           cp README.md LICENSE-APACHE LICENSE-MIT "dist/${package}/"
-          tar -C dist -czf "dist/${package}.tar.gz" "${package}"
+          case "${ARCHIVE}" in
+            tar.gz)
+              tar -C dist -czf "dist/${package}.tar.gz" "${package}"
+              ;;
+            zip)
+              (
+                cd dist
+                zip -q -r "${package}.zip" "${package}"
+              )
+              ;;
+            *)
+              echo "Unsupported archive format: ${ARCHIVE}" >&2
+              exit 1
+              ;;
+          esac
           rm -r "dist/${package}"
-
-      - name: Create ZIP archive
-        if: matrix.archive == 'zip'
-        shell: pwsh
-        env:
-          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $package = "alpen-cli-v$env:RELEASE_VERSION-$env:TARGET"
-          $packageDirectory = Join-Path "dist" $package
-          New-Item -ItemType Directory -Path $packageDirectory | Out-Null
-          Copy-Item "target/$env:TARGET/release/alpen.exe" $packageDirectory
-          Copy-Item "README.md", "LICENSE-APACHE", "LICENSE-MIT" $packageDirectory
-          Compress-Archive -Path $packageDirectory -DestinationPath "dist/$package.zip"
-          Remove-Item -Recurse $packageDirectory
 
       - name: Upload release artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
