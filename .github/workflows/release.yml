@@ -117,7 +117,9 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: rustup target add "${TARGET}"
 
-      - name: Rust cache
+      # Pull request caches are scoped to refs/pull/.../merge and cannot be
+      # restored by tag runs.
+      - name: Rust cache # zizmor: ignore[cache-poisoning]
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-on-failure: true
