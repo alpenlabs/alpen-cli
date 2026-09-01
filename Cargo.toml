@@ -61,8 +61,10 @@ strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag =
 strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0-rc.2" }
 
 # Third-party dependencies inherited by the CLI crate.
+aes-gcm-siv = "0.11.1"
 alloy = "1.0.41"
 argh = "0.1"
+argon2 = "0.5.3"
 async-trait = "0.1.80"
 bdk_bitcoind_rpc = "0.22.0"
 bdk_esplora = { version = "0.22.2", default-features = false, features = [
@@ -70,7 +72,14 @@ bdk_esplora = { version = "0.22.2", default-features = false, features = [
   "tokio",
 ] }
 bdk_wallet = "3.1.0"
+bip39 = { version = "2.0.0", features = ["all-languages"] }
 chrono = "0.4.44"
+colored = "3.1.1"
+config = { version = "0.15.24", default-features = false, features = ["toml"] }
+dialoguer = "0.12.0"
+directories = "5.0.1"
+indicatif = { version = "0.18.4", features = ["improved_unicode", "tokio"] }
+keyring = { version = "3.3.0", default-features = false }
 make_buf = { git = "https://github.com/alpenlabs/make_buf", version = "1.0.2" }
 rand_core = { version = "0.6", default-features = false }
 rusqlite = "0.31.0"
@@ -82,6 +91,7 @@ terrors = "0.3.0"
 tokio = { version = "1.52", features = ["full"] }
 toml = "0.5"
 zeroize = { version = "1.8.1", features = ["derive"] }
+zxcvbn = "3.1.0"
 
 [profile.release]
 opt-level = "z"   # Optimized for size, use 3 for speed
