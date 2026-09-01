@@ -28,7 +28,7 @@ strata-l1-txfmt.workspace = true
 strata-ol-bridge-types.workspace = true
 strata-primitives.workspace = true
 
-aes-gcm-siv = "0.11.1"
+aes-gcm-siv.workspace = true
 alloy = { workspace = true, features = [
   "std",
   "rpc-client-ws",
@@ -39,18 +39,18 @@ alloy = { workspace = true, features = [
   "rpc-types",
 ] }
 argh.workspace = true
-argon2 = "0.5.3"
+argon2.workspace = true
 async-trait.workspace = true
 bdk_bitcoind_rpc.workspace = true
 bdk_esplora.workspace = true
 bdk_wallet = { workspace = true, features = ["rusqlite"] }
-bip39 = { version = "2.0.0", features = ["all-languages"] }
+bip39.workspace = true
 chrono.workspace = true
-colored = "3.1.1"
-config = { version = "0.15.24", default-features = false, features = ["toml"] }
-dialoguer = "0.12.0"
-directories = "5.0.1"
-indicatif = { version = "0.18.4", features = ["improved_unicode", "tokio"] }
+colored.workspace = true
+config.workspace = true
+dialoguer.workspace = true
+directories.workspace = true
+indicatif.workspace = true
 make_buf.workspace = true
 rand_core.workspace = true
 rusqlite.workspace = true
@@ -61,7 +61,7 @@ sled.workspace = true
 terrors.workspace = true
 tokio.workspace = true
 zeroize.workspace = true
-zxcvbn = "3.1.0"
+zxcvbn.workspace = true
 
 # sha2 fails to compile on windows with the "asm" feature
 [target.'cfg(not(target_os = "windows"))'.dependencies]
@@ -72,14 +72,10 @@ sha2 = { workspace = true, features = ["asm", "loongarch64_asm"] }
 rusqlite = { workspace = true, features = ["bundled"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-keyring = { version = "3.3.0", default-features = false, features = [
-  "apple-native",
-] }
+keyring = { workspace = true, features = ["apple-native"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-keyring = { version = "3.3.0", default-features = false, features = [
-  "windows-native",
-] }
+keyring = { workspace = true, features = ["windows-native"] }
 
 [dev-dependencies]
 strata-bridge-params.workspace = true
