@@ -234,20 +234,31 @@ jobs:
       - name: Create GitHub release
         shell: bash
         env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.validate.outputs.tag }}
         run: |
           set -euo pipefail
-          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "Release ${RELEASE_TAG} already exists; refusing to overwrite it" >&2
-            exit 1
+          if is_draft=$(gh release view "${RELEASE_TAG}" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [[ "${is_draft}" != "true" ]]; then
+              echo "Release ${RELEASE_TAG} is already published; refusing to overwrite it" >&2
+              exit 1
+            fi
+            echo "Resuming existing draft release ${RELEASE_TAG}"
+          else
+            gh release create "${RELEASE_TAG}" \
+              --draft \
+              --generate-notes \
+              --notes-file release-notes.md \
+              --title "${RELEASE_TAG}" \
+              --verify-tag
           fi
 
-          gh release create "${RELEASE_TAG}" \
+          gh release upload "${RELEASE_TAG}" \
             dist/alpen-cli-* \
             dist/SHA256SUMS \
-            --generate-notes \
-            --latest \
-            --notes-file release-notes.md \
-            --title "${RELEASE_TAG}" \
-            --verify-tag
+            --clobber
+
+          gh release edit "${RELEASE_TAG}" \
+            --draft=false \
+            --latest
