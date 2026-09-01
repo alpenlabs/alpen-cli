@@ -89,26 +89,30 @@ jobs:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
             archive: tar.gz
+            build-package: musl-tools
           - os: macos-15
             target: aarch64-apple-darwin
             archive: tar.gz
           - os: macos-15-intel
             target: x86_64-apple-darwin
             archive: tar.gz
-          - os: windows-2025
-            target: x86_64-pc-windows-msvc
+          - os: ubuntu-24.04
+            target: x86_64-pc-windows-gnu
             archive: zip
+            build-package: gcc-mingw-w64-x86-64
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Install musl build tools
-        if: runner.os == 'Linux'
+      - name: Install target build tools
+        if: matrix.build-package != ''
+        env:
+          BUILD_PACKAGE: ${{ matrix.build-package }}
         run: |
           sudo apt-get update
-          sudo apt-get install --yes musl-tools
+          sudo apt-get install --yes "${BUILD_PACKAGE}"
 
       - name: Add Rust target
         shell: bash
@@ -130,7 +134,7 @@ jobs:
         run: cargo build --release --locked --bin alpen --target "${TARGET}"
 
       - name: Verify static Linux binary
-        if: runner.os == 'Linux'
+        if: matrix.target == 'x86_64-unknown-linux-musl'
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
@@ -144,7 +148,7 @@ jobs:
           fi
 
       - name: Package Unix binary
-        if: runner.os != 'Windows'
+        if: matrix.archive == 'tar.gz'
         shell: bash
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
@@ -159,7 +163,7 @@ jobs:
           rm -r "dist/${package}"
 
       - name: Package Windows binary
-        if: runner.os == 'Windows'
+        if: matrix.archive == 'zip'
         shell: pwsh
         env:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
