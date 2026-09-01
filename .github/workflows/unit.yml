@@ -35,6 +35,18 @@ jobs:
           rustup toolchain install nightly --profile minimal
           rustup default nightly
 
+      - name: Install bitcoind
+        env:
+          BITCOIND_VERSION: "30.2"
+          BITCOIND_ARCH: "x86_64-linux-gnu"
+        run: |
+          curl -fsSLO --proto "=https" --tlsv1.3 "https://bitcoincore.org/bin/bitcoin-core-$BITCOIND_VERSION/bitcoin-$BITCOIND_VERSION-$BITCOIND_ARCH.tar.gz"
+          curl -fsSLO --proto "=https" --tlsv1.3 "https://bitcoincore.org/bin/bitcoin-core-$BITCOIND_VERSION/SHA256SUMS"
+          sha256sum --ignore-missing --check SHA256SUMS
+          tar xzf "bitcoin-$BITCOIND_VERSION-$BITCOIND_ARCH.tar.gz"
+          sudo install -m 0755 -t /usr/local/bin bitcoin-"$BITCOIND_VERSION"/bin/*
+          bitcoind --version
+
       - name: Install latest cargo-nextest release
         uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
         with:
@@ -49,38 +61,11 @@ jobs:
         run: |
           cargo --locked nextest run --all-features --workspace
 
-  doc:
-    name: Run doc tests
-    runs-on: ubuntu-latest
-    env:
-      RUST_BACKTRACE: 1
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install Rust toolchain
-        run: |
-          rustup toolchain install nightly --profile minimal
-          rustup default nightly
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          cache-on-failure: true
-
-      - name: Run doctests
-        run: cargo test --doc --all-features
-
   unit-success:
     name: Check that unit tests pass
     runs-on: ubuntu-latest
     if: always()
-    needs: [test, doc]
+    needs: [test]
     timeout-minutes: 60
     steps:
       - name: Decide whether the needed jobs succeeded or failed

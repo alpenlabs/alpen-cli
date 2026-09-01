@@ -64,16 +64,16 @@ strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v
 alloy = "1.0.41"
 argh = "0.1"
 async-trait = "0.1.80"
-bdk_bitcoind_rpc = "0.17.1"
-bdk_esplora = { version = "0.20.1", default-features = false, features = [
-  "async-https",
+bdk_bitcoind_rpc = "0.20.0"
+bdk_esplora = { version = "0.22.2", default-features = false, features = [
   "async-https-rustls",
   "tokio",
 ] }
-bdk_wallet = "1.0.0"
+bdk_wallet = "2.0.0"
 chrono = "0.4.44"
 make_buf = { git = "https://github.com/alpenlabs/make_buf", version = "1.0.2" }
 rand_core = { version = "0.6", default-features = false }
+rusqlite = "0.31.0"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10.8"
 shrex = { version = "1", features = ["serde"] }

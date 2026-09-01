@@ -14,10 +14,10 @@ use backend::{BitcoinBackend, ScanError, SyncError, UpdateError, WalletUpdate};
 use bdk_esplora::esplora_client::{self, AsyncClient};
 use bdk_wallet::{
     bitcoin::{FeeRate, Network},
-    rusqlite::{self, Connection},
     PersistedWallet, Wallet,
 };
 use persist::Persister;
+use rusqlite::{self, Connection};
 use terrors::OneOf;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 

@@ -1,10 +1,7 @@
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::OnceLock};
 
-use bdk_wallet::{
-    bitcoin::Network,
-    rusqlite::{self, Connection},
-    ChangeSet, WalletPersister,
-};
+use bdk_wallet::{bitcoin::Network, ChangeSet, WalletPersister};
+use rusqlite::{self, Connection};
 
 use crate::bitcoin::BitcoinWallet;
 
