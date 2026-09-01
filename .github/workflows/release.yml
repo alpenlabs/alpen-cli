@@ -1,30 +1,264 @@
-name: Build and upload binaries to release
+name: Release binaries
 
 on:
   push:
     tags:
       - "v*"
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/**"
+      - "rust-toolchain.toml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions: {}
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  github:
-    name: Publish Release on GitHub
+  validate:
+    name: Validate release version
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      publish: ${{ steps.version.outputs.publish }}
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate package version and tag
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          version=$(cargo metadata --format-version 1 --no-deps --locked \
+            | jq -r '.packages[] | select(.name == "alpen-cli") | .version')
+          expected_tag="v${version}"
+
+          if [[ "${EVENT_NAME}" == "push" ]]; then
+            if [[ "${REF_NAME}" != "${expected_tag}" ]]; then
+              echo "Tag ${REF_NAME} does not match package version ${version}" >&2
+              exit 1
+            fi
+
+            git fetch --no-tags origin main:refs/remotes/origin/main
+            if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+              echo "Release commit is not reachable from main" >&2
+              exit 1
+            fi
+            publish=true
+          else
+            publish=false
+          fi
+
+          {
+            echo "publish=${publish}"
+            echo "tag=${expected_tag}"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            archive: tar.gz
+            build-package: musl-tools
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: ubuntu-latest
+            target: x86_64-pc-windows-gnu
+            archive: zip
+            build-package: gcc-mingw-w64-x86-64
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Create or update GitHub release
+      - name: Install target build tools
+        if: matrix.build-package != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_PACKAGE: ${{ matrix.build-package }}
         run: |
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release edit "${GITHUB_REF_NAME}" --latest
-          else
-            gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes
+          sudo apt-get update
+          sudo apt-get install --yes "${BUILD_PACKAGE}"
+
+      - name: Add Rust target
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: rustup target add "${TARGET}"
+
+      # Pull request caches are scoped to refs/pull/.../merge and cannot be
+      # restored by tag runs.
+      - name: Rust cache # zizmor: ignore[cache-poisoning]
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-on-failure: true
+          key: ${{ matrix.target }}
+
+      - name: Build release binary
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo build --release --locked --bin alpen --target "${TARGET}"
+
+      - name: Verify release binary
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          binary="target/${TARGET}/release/alpen"
+          if [[ "${TARGET}" == *-windows-gnu ]]; then
+            binary="${binary}.exe"
           fi
+          file "${binary}"
+          if [[ "${TARGET}" == *-linux-musl ]] && readelf --dynamic "${binary}" | grep --quiet '(NEEDED)'; then
+            echo "Linux release binary has dynamic library dependencies" >&2
+            exit 1
+          fi
+
+      - name: Create release archive
+        shell: bash
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          package="alpen-cli-v${RELEASE_VERSION}-${TARGET}"
+          binary_name="alpen"
+          if [[ "${TARGET}" == *-windows-gnu ]]; then
+            binary_name="alpen.exe"
+          fi
+          mkdir -p "dist/${package}"
+          install -m 0755 "target/${TARGET}/release/${binary_name}" "dist/${package}/${binary_name}"
+          cp README.md LICENSE-APACHE LICENSE-MIT "dist/${package}/"
+          case "${ARCHIVE}" in
+            tar.gz)
+              tar -C dist -czf "dist/${package}.tar.gz" "${package}"
+              ;;
+            zip)
+              (
+                cd dist
+                zip -q -r "${package}.zip" "${package}"
+              )
+              ;;
+            *)
+              echo "Unsupported archive format: ${ARCHIVE}" >&2
+              exit 1
+              ;;
+          esac
+          rm -r "dist/${package}"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/alpen-cli-*.${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    if: needs.validate.outputs.publish == 'true'
+    needs:
+      - validate
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums and release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum alpen-cli-* | LC_ALL=C sort -k2 > SHA256SUMS
+          {
+            echo "## SHA-256 checksums"
+            echo
+            echo '```text'
+            cat SHA256SUMS
+            echo '```'
+            echo
+            echo "Download \`SHA256SUMS\` and verify the artifacts with \`sha256sum --check SHA256SUMS\`."
+          } > ../release-notes.md
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/alpen-cli-*
+            dist/SHA256SUMS
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if is_draft=$(gh release view "${RELEASE_TAG}" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [[ "${is_draft}" != "true" ]]; then
+              echo "Release ${RELEASE_TAG} is already published; refusing to overwrite it" >&2
+              exit 1
+            fi
+            echo "Resuming existing draft release ${RELEASE_TAG}"
+          else
+            gh release create "${RELEASE_TAG}" \
+              --draft \
+              --generate-notes \
+              --notes-file release-notes.md \
+              --title "${RELEASE_TAG}" \
+              --verify-tag
+          fi
+
+          gh release upload "${RELEASE_TAG}" \
+            dist/alpen-cli-* \
+            dist/SHA256SUMS \
+            --clobber
+
+          gh release edit "${RELEASE_TAG}" \
+            --draft=false \
+            --latest

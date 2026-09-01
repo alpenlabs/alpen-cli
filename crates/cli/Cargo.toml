@@ -67,6 +67,10 @@ zxcvbn = "3.1.0"
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 sha2 = { workspace = true, features = ["asm", "loongarch64_asm"] }
 
+# Build SQLite from source when producing the static Linux release binary.
+[target.'cfg(target_env = "musl")'.dependencies]
+rusqlite = { workspace = true, features = ["bundled"] }
+
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 keyring = { version = "3.3.0", default-features = false, features = [
   "apple-native",

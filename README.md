@@ -7,6 +7,15 @@
 `alpen` is a command-line wallet for managing Bitcoin and Alpen funds and
 interacting with the Strata bridge.
 
+## Install official binaries
+
+Official release archives for Linux (x86-64), macOS (Apple silicon), and
+Windows (x86-64) are available from [GitHub Releases]. Each release includes a
+`SHA256SUMS` file and build-provenance attestations. Verify the downloaded
+archive against `SHA256SUMS` before running it.
+
+[GitHub Releases]: https://github.com/alpenlabs/alpen-cli/releases
+
 ## Install from source
 
 The repository pins its Rust toolchain in `rust-toolchain.toml`.
