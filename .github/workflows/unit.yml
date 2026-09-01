@@ -35,6 +35,18 @@ jobs:
           rustup toolchain install nightly --profile minimal
           rustup default nightly
 
+      - name: Install bitcoind
+        env:
+          BITCOIND_VERSION: "31.1"
+          BITCOIND_ARCH: "x86_64-linux-gnu"
+        run: |
+          curl -fsSLO --proto "=https" --tlsv1.3 "https://bitcoincore.org/bin/bitcoin-core-$BITCOIND_VERSION/bitcoin-$BITCOIND_VERSION-$BITCOIND_ARCH.tar.gz"
+          curl -fsSLO --proto "=https" --tlsv1.3 "https://bitcoincore.org/bin/bitcoin-core-$BITCOIND_VERSION/SHA256SUMS"
+          sha256sum --ignore-missing --check SHA256SUMS
+          tar xzf "bitcoin-$BITCOIND_VERSION-$BITCOIND_ARCH.tar.gz"
+          sudo install -m 0755 -t /usr/local/bin bitcoin-"$BITCOIND_VERSION"/bin/*
+          bitcoind --version
+
       - name: Install latest cargo-nextest release
         uses: taiki-e/install-action@5b4d68e2e660441203ab128a23676f1e4faf1532 # v2.86.3
         with:
