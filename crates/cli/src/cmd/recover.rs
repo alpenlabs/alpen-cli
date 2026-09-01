@@ -76,7 +76,7 @@ pub async fn recover(
     for (key, desc) in descs {
         let desc = desc
             .clone()
-            .into_wallet_descriptor(l1w.secp_ctx(), settings.network)
+            .into_wallet_descriptor(l1w.secp_ctx(), settings.network.into())
             .internal_error("Failed to convert to wallet descriptor")?;
 
         let mut recovery_wallet = Wallet::create_single(desc)
@@ -220,7 +220,7 @@ fn seed_recovery_wallet(
         settings.recovery_delay,
     );
     let wallet_descriptor = descriptor
-        .into_wallet_descriptor(SECP256K1, settings.network)
+        .into_wallet_descriptor(SECP256K1, settings.network.into())
         .internal_error("Failed to convert to wallet descriptor")?;
 
     Wallet::create_single(wallet_descriptor)

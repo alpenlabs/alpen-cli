@@ -297,7 +297,10 @@ async fn apply_update_stream(
                     .apply_block_connected_to(&ev.block, height, connected_to)
                     .map_err(UpdateError::from_err)?
             }
-            WalletUpdate::MempoolTxs(txs) => wallet.apply_unconfirmed_txs(txs),
+            WalletUpdate::Mempool(event) => {
+                wallet.apply_unconfirmed_txs(event.update);
+                wallet.apply_evicted_txs(event.evicted);
+            }
         }
     }
 

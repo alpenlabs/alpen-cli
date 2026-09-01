@@ -10,7 +10,7 @@ use std::{
 
 use async_trait::async_trait;
 use bdk_bitcoind_rpc::{
-    BlockEvent, Emitter, NO_EXPECTED_MEMPOOL_TXIDS,
+    BlockEvent, Emitter, MempoolEvent, NO_EXPECTED_MEMPOOL_TXS,
     bitcoincore_rpc::{self, RpcApi, json::EstimateMode},
 };
 use bdk_esplora::EsploraAsyncExt;
@@ -97,7 +97,7 @@ pub enum WalletUpdate {
     SpkSync(SyncResponse),
     SpkScan(FullScanResponse<KeychainKind>),
     NewBlock(BlockEvent<Block>),
-    MempoolTxs(Vec<(Transaction, u64)>),
+    Mempool(MempoolEvent),
 }
 
 pub type UpdateSender = UnboundedSender<WalletUpdate>;
@@ -287,7 +287,7 @@ impl BitcoinBackend for Arc<bitcoincore_rpc::Client> {
         let bar2 = bar.clone();
 
         let used_scripts = spawn_bitcoin_core(self.clone(), move |client| {
-            let mut emitter = Emitter::new(client, last_cp, 0, NO_EXPECTED_MEMPOOL_TXIDS);
+            let mut emitter = Emitter::new(client, last_cp, 0, NO_EXPECTED_MEMPOOL_TXS);
             let mut used_scripts = HashSet::new();
             let mut blocks_scanned = 0;
 
@@ -309,7 +309,7 @@ impl BitcoinBackend for Arc<bitcoincore_rpc::Client> {
             record_used_scripts(
                 &requested_scripts,
                 &mut used_scripts,
-                mempool.new_txs.iter().map(|(tx, _)| tx),
+                mempool.update.iter().map(|(tx, _)| tx.as_ref()),
             );
 
             Ok(used_scripts)
@@ -415,7 +415,7 @@ async fn sync_wallet_with_core(
     let mut blocks_scanned = 0;
 
     spawn_bitcoin_core(client.clone(), move |client| {
-        let mut emitter = Emitter::new(client, last_cp, start_height, NO_EXPECTED_MEMPOOL_TXIDS);
+        let mut emitter = Emitter::new(client, last_cp, start_height, NO_EXPECTED_MEMPOOL_TXS);
         while let Some(ev) = emitter.next_block().unwrap() {
             blocks_scanned += 1;
             let height = ev.block_height();
@@ -432,11 +432,9 @@ async fn sync_wallet_with_core(
         }
         bar2.println("Scanning mempool");
         let mempool = emitter.mempool().unwrap();
-        let txs_len = mempool.new_txs.len();
+        let txs_len = mempool.update.len();
         let apply_start = Instant::now();
-        send_update
-            .send(WalletUpdate::MempoolTxs(mempool.new_txs))
-            .unwrap();
+        send_update.send(WalletUpdate::Mempool(mempool)).unwrap();
         let elapsed = apply_start.elapsed();
         bar.println(format!(
             "Applied {txs_len} unconfirmed transactions in {elapsed:?}"

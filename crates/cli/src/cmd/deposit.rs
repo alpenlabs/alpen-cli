@@ -104,7 +104,7 @@ fn prepare_deposit_request(
     let bridge_in_address = {
         let desc = bridge_in_desc
             .clone()
-            .into_wallet_descriptor(SECP256K1, network)
+            .into_wallet_descriptor(SECP256K1, network.into())
             .expect("valid descriptor");
         let mut temp_wallet = Wallet::create_single(desc)
             .network(network)

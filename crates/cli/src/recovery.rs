@@ -9,7 +9,7 @@ use std::{
 
 use aes_gcm_siv::{Aes256GcmSiv, KeyInit, Nonce, Tag, aead::AeadMutInPlace};
 use bdk_wallet::{
-    bitcoin::{Network, constants::ChainHash},
+    bitcoin::{Network, NetworkKind, constants::ChainHash},
     keys::{DescriptorPublicKey, DescriptorSecretKey},
     miniscript::{self, Descriptor, descriptor::DescriptorKeyParseError},
     template::DescriptorTemplateOut,
@@ -25,6 +25,18 @@ use crate::seed::Seed;
 // Key for the reclaim counter within its own tree (see `counter_tree` below) -- any fixed key
 // works here since this tree holds nothing else.
 const RECLAIM_COUNTER_KEY: &[u8] = b"drt_reclaim_counter";
+
+fn descriptor_network_chain_hash(network: NetworkKind) -> ChainHash {
+    match network {
+        NetworkKind::Main => Network::Bitcoin,
+        NetworkKind::Test => Network::Testnet,
+    }
+    .chain_hash()
+}
+
+fn descriptor_network_from_chain_hash(chain_hash: ChainHash) -> Option<NetworkKind> {
+    Network::from_chain_hash(chain_hash).map(Into::into)
+}
 
 #[expect(
     missing_debug_implementations,
@@ -168,7 +180,7 @@ impl DescriptorRecovery {
 
         let networks = networks
             .iter()
-            .map(|n| n.chain_hash().to_bytes())
+            .map(|network| descriptor_network_chain_hash(*network).to_bytes())
             .collect::<Vec<_>>();
         let networks_len = networks.len() as u8;
 
@@ -289,7 +301,7 @@ impl DescriptorRecovery {
             for _ in 0..networks_len {
                 let mut chain_hash = [0u8; 32];
                 Read::read_exact(&mut cursor, &mut chain_hash).map_err(OneOf::new)?;
-                let network = Network::from_chain_hash(ChainHash::from(chain_hash))
+                let network = descriptor_network_from_chain_hash(ChainHash::from(chain_hash))
                     .ok_or(OneOf::new(InvalidNetwork))?;
                 networks.insert(network);
             }
@@ -428,6 +440,34 @@ mod tests {
             process::id(),
             OsRng.next_u64()
         ))
+    }
+
+    #[test]
+    fn descriptor_network_encoding_accepts_legacy_chain_hashes() {
+        assert_eq!(
+            descriptor_network_from_chain_hash(Network::Bitcoin.chain_hash()),
+            Some(NetworkKind::Main)
+        );
+
+        for network in [
+            Network::Testnet,
+            Network::Testnet4,
+            Network::Signet,
+            Network::Regtest,
+        ] {
+            assert_eq!(
+                descriptor_network_from_chain_hash(network.chain_hash()),
+                Some(NetworkKind::Test)
+            );
+        }
+    }
+
+    #[test]
+    fn descriptor_network_encoding_round_trips_network_kinds() {
+        for network in [NetworkKind::Main, NetworkKind::Test] {
+            let encoded = descriptor_network_chain_hash(network);
+            assert_eq!(descriptor_network_from_chain_hash(encoded), Some(network));
+        }
     }
 
     #[tokio::test]
