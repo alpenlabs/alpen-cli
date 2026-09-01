@@ -131,7 +131,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: cargo build --release --locked --bin alpen --target "${TARGET}"
 
-      - name: Verify static Linux binary
+      - name: Verify static linkage
         if: matrix.target == 'x86_64-unknown-linux-musl'
         shell: bash
         env:
@@ -145,7 +145,7 @@ jobs:
             exit 1
           fi
 
-      - name: Package Unix binary
+      - name: Create tar.gz archive
         if: matrix.archive == 'tar.gz'
         shell: bash
         env:
@@ -160,7 +160,7 @@ jobs:
           tar -C dist -czf "dist/${package}.tar.gz" "${package}"
           rm -r "dist/${package}"
 
-      - name: Package Windows binary
+      - name: Create ZIP archive
         if: matrix.archive == 'zip'
         shell: pwsh
         env:
