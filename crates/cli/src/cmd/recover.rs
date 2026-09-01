@@ -2,12 +2,12 @@ use std::collections::{BTreeMap, HashSet};
 
 use argh::FromArgs;
 use bdk_wallet::{
-    bitcoin::{secp256k1::SECP256K1, Amount, FeeRate, PrivateKey, ScriptBuf},
+    KeychainKind, Wallet,
+    bitcoin::{Amount, FeeRate, PrivateKey, ScriptBuf, secp256k1::SECP256K1},
     chain::ChainOracle,
     coin_selection::InsufficientFunds,
     descriptor::IntoWalletDescriptor,
     error::CreateTxError,
-    KeychainKind, Wallet,
 };
 use chrono::Utc;
 use colored::Colorize;
@@ -15,7 +15,7 @@ use strata_cli_common::errors::{DisplayableError, DisplayedError};
 use strata_primitives::crypto::even_kp;
 
 use crate::{
-    bitcoin::{get_fee_rate, log_fee_rate, sync_wallet, BitcoinWallet},
+    bitcoin::{BitcoinWallet, get_fee_rate, log_fee_rate, sync_wallet},
     cmd::deposit::{bridge_in_descriptor, compute_recover_at_height},
     constants::{RECOVERY_DESC_CLEANUP_DELAY, SEED_RECOVERY_GAP_LIMIT},
     link::{OnchainObject, PrettyPrint},

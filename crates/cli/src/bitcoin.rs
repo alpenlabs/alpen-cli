@@ -13,13 +13,13 @@ use std::{
 use backend::{BitcoinBackend, ScanError, SyncError, UpdateError, WalletUpdate};
 use bdk_esplora::esplora_client::{self, AsyncClient};
 use bdk_wallet::{
-    bitcoin::{FeeRate, Network},
     PersistedWallet, Wallet,
+    bitcoin::{FeeRate, Network},
 };
 use persist::Persister;
 use rusqlite::{self, Connection};
 use terrors::OneOf;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
 use crate::seed::Seed;
 
@@ -52,18 +52,19 @@ pub(crate) mod tests {
 
     use async_trait::async_trait;
     use bdk_wallet::{
+        KeychainKind,
         bitcoin::{FeeRate, Network, ScriptBuf, Transaction},
         chain::{
-            spk_client::{FullScanRequestBuilder, SyncRequestBuilder},
             CheckPoint,
+            spk_client::{FullScanRequestBuilder, SyncRequestBuilder},
         },
-        KeychainKind,
     };
     use terrors::OneOf;
 
     use super::{
+        BitcoinBackend, BitcoinWallet, SyncError,
         backend::{BroadcastTxError, GetFeeRateError, InvalidFee, ScanError, UpdateSender},
-        get_fee_rate, BitcoinBackend, BitcoinWallet, SyncError,
+        get_fee_rate,
     };
 
     #[derive(Debug)]

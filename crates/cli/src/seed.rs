@@ -2,15 +2,15 @@
 use std::io;
 use std::str::FromStr;
 
-use aes_gcm_siv::{aead::AeadMutInPlace, Aes256GcmSiv, KeyInit, Nonce, Tag};
+use aes_gcm_siv::{Aes256GcmSiv, KeyInit, Nonce, Tag, aead::AeadMutInPlace};
 use alloy::{network::EthereumWallet, signers::local::PrivateKeySigner};
 use bdk_wallet::{
-    bitcoin::{
-        bip32::{ChildNumber, DerivationPath, Xpriv},
-        secp256k1::{PublicKey, SecretKey, SECP256K1},
-        Network,
-    },
     CreateParams, KeychainKind, LoadParams, Wallet,
+    bitcoin::{
+        Network,
+        bip32::{ChildNumber, DerivationPath, Xpriv},
+        secp256k1::{PublicKey, SECP256K1, SecretKey},
+    },
 };
 use bip39::{Language, Mnemonic};
 use dialoguer::{Confirm, Input};
@@ -81,7 +81,7 @@ impl Seed {
         Self(bytes)
     }
 
-    pub(crate) fn gen<R: CryptoRngCore>(rng: &mut R) -> Self {
+    pub(crate) fn generate<R: CryptoRngCore>(rng: &mut R) -> Self {
         let mut bytes = Zeroizing::new([0u8; SEED_LEN]);
         rng.fill_bytes(bytes.as_mut());
         Self(bytes)
@@ -286,7 +286,7 @@ pub fn load_or_create(
             }
         } else {
             println!("Creating new wallet");
-            Seed::gen(&mut OsRng)
+            Seed::generate(&mut OsRng)
         };
 
         let mut password = Password::read(true).map_err(OneOf::new)?;
@@ -397,7 +397,7 @@ mod test {
     // Test valid seed encryption and decryption
     fn seed_encrypt_decrypt() {
         let mut password = Password::new(String::from("swordfish"));
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
 
         let encrypted_seed = seed.encrypt(&mut password, &mut OsRng).unwrap();
         let decrypted_seed = encrypted_seed.decrypt(&mut password).unwrap();
@@ -410,7 +410,7 @@ mod test {
     fn evil_password() {
         let mut password = Password::new(String::from("swordfish"));
         let mut evil_password = Password::new(String::from("evil"));
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
 
         let encrypted_seed = seed.encrypt(&mut password, &mut OsRng).unwrap();
 
@@ -421,7 +421,7 @@ mod test {
     // Using an evil salt fails decryption
     fn evil_salt() {
         let mut password = Password::new(String::from("swordfish"));
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
 
         let mut encrypted_seed = seed.encrypt(&mut password, &mut OsRng).unwrap();
         let index = 0;
@@ -434,7 +434,7 @@ mod test {
     // Using an evil nonce fails decryption
     fn evil_nonce() {
         let mut password = Password::new(String::from("swordfish"));
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
 
         let mut encrypted_seed = seed.encrypt(&mut password, &mut OsRng).unwrap();
         let index = PW_SALT_LEN;
@@ -447,7 +447,7 @@ mod test {
     // Using an evil seed fails decryption
     fn evil_seed() {
         let mut password = Password::new(String::from("swordfish"));
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
 
         let mut encrypted_seed = seed.encrypt(&mut password, &mut OsRng).unwrap();
         let index = PW_SALT_LEN + AES_NONCE_LEN;
@@ -460,7 +460,7 @@ mod test {
     // Using an evil tag fails decryption
     fn evil_tag() {
         let mut password = Password::new(String::from("swordfish"));
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
 
         let mut encrypted_seed = seed.encrypt(&mut password, &mut OsRng).unwrap();
         let index = PW_SALT_LEN + AES_NONCE_LEN + SEED_LEN;
@@ -518,7 +518,7 @@ mod test {
     // The reclaim keypair must be a pure function of (seed, counter): same inputs always
     // reproduce the same key, so a lost descriptor DB doesn't strand funds.
     fn drt_reclaim_keypair_is_deterministic_and_distinct_per_counter() {
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
 
         let keypair_0 = seed.drt_reclaim_keypair(0);
         let keypair_0_again = seed.drt_reclaim_keypair(0);
@@ -529,7 +529,7 @@ mod test {
         assert_ne!(keypair_0.secret_key, keypair_1.secret_key);
         assert_ne!(keypair_0.public_key, keypair_1.public_key);
 
-        let other_seed = Seed::gen(&mut OsRng);
+        let other_seed = Seed::generate(&mut OsRng);
         let keypair_0_other_seed = other_seed.drt_reclaim_keypair(0);
         assert_ne!(keypair_0.secret_key, keypair_0_other_seed.secret_key);
     }

@@ -15,9 +15,8 @@ use std::process::exit;
 use alpen_cli as _;
 use bitcoin::persist::set_data_dir;
 use cmd::{
-    backup::backup, balance::balance, config::config, deposit::deposit, drain::drain,
-    receive::receive, recover::recover, scan::scan, send::send, withdraw::withdraw, Commands,
-    TopLevel,
+    Commands, TopLevel, backup::backup, balance::balance, config::config, deposit::deposit,
+    drain::drain, receive::receive, recover::recover, scan::scan, send::send, withdraw::withdraw,
 };
 #[cfg(not(feature = "test-mode"))]
 use cmd::{change_pwd::change_pwd, reset::reset};

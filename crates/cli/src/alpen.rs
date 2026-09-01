@@ -3,11 +3,11 @@ use std::ops::{Deref, DerefMut};
 use alloy::{
     network::EthereumWallet,
     providers::{
+        Identity, ProviderBuilder, RootProvider,
         fillers::{
             BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
             WalletFiller,
         },
-        Identity, ProviderBuilder, RootProvider,
     },
 };
 

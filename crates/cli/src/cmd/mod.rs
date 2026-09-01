@@ -62,7 +62,7 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     use std::fs::remove_dir_all;
     use std::{
-        env::{set_var, temp_dir},
+        env::temp_dir,
         fs::{create_dir_all, write},
         process,
         sync::Arc,
@@ -104,15 +104,14 @@ mod tests {
             "#,
         )
         .expect("test config should be written");
-        set_var("PROJ_DIRS", &test_root);
-        set_var("CLI_CONFIG", &config_file);
         assert!(set_data_dir(test_root.clone(), Network::Bitcoin));
 
         let backend = Arc::new(TestBitcoinBackend {
             fee_rate: Some(FeeRate::BROADCAST_MIN),
         });
         let load_settings = || {
-            let mut settings = Settings::load().expect("mainnet settings should load");
+            let mut settings = Settings::load_from_paths(test_root.clone(), &config_file)
+                .expect("mainnet settings should load");
             assert_eq!(settings.network, Network::Bitcoin);
             settings.bitcoin_backend = backend.clone();
             settings
@@ -133,9 +132,11 @@ mod tests {
             .await
             .unwrap();
         let args = DepositArgs::from_args(&["alpen", "deposit"], &[]).unwrap();
-        assert!(deposit::deposit(args, seed(), load_settings())
-            .await
-            .is_err());
+        assert!(
+            deposit::deposit(args, seed(), load_settings())
+                .await
+                .is_err()
+        );
         let address = "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr";
         let args =
             DrainArgs::from_args(&["alpen", "drain"], &["--bitcoin-address", address]).unwrap();

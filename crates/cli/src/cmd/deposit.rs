@@ -3,16 +3,16 @@ use std::{str::FromStr, time::Duration};
 use alloy::{primitives::Address as AlpenAddress, providers::WalletProvider};
 use argh::FromArgs;
 use bdk_wallet::{
+    KeychainKind, TxOrdering, Wallet,
     bitcoin::{
-        secp256k1::SECP256K1, Address as BitcoinAddress, Amount, FeeRate, Network, PrivateKey,
-        Transaction, TxOut, XOnlyPublicKey,
+        Address as BitcoinAddress, Amount, FeeRate, Network, PrivateKey, Transaction, TxOut,
+        XOnlyPublicKey, secp256k1::SECP256K1,
     },
     chain::ChainOracle,
     coin_selection::InsufficientFunds,
     descriptor::IntoWalletDescriptor,
     error::CreateTxError,
     template::DescriptorTemplateOut,
-    KeychainKind, TxOrdering, Wallet,
 };
 use colored::Colorize;
 use indicatif::ProgressBar;
@@ -26,7 +26,7 @@ use strata_primitives::crypto::even_kp;
 
 use crate::{
     alpen::AlpenWallet,
-    bitcoin::{get_fee_rate, log_fee_rate, BitcoinWallet},
+    bitcoin::{BitcoinWallet, get_fee_rate, log_fee_rate},
     cmd::recover::reconstruct_reclaim_counter,
     constants::{ALPEN_EE_ACCT_SERIAL, BITCOIN_BLOCK_TIME},
     link::{OnchainObject, PrettyPrint},
@@ -254,7 +254,9 @@ pub async fn deposit(
             .with_maybe_explorer(settings.mempool_space_endpoint.as_deref())
             .pretty(),
     );
-    println!("Expect transaction confirmation in ~{BITCOIN_BLOCK_TIME:?}. Funds will take longer than this to be available on Alpen.");
+    println!(
+        "Expect transaction confirmation in ~{BITCOIN_BLOCK_TIME:?}. Funds will take longer than this to be available on Alpen."
+    );
     Ok(())
 }
 
@@ -300,9 +302,9 @@ mod tests {
     use std::sync::Arc;
 
     use bdk_wallet::{
-        bitcoin::{bip32::Xpriv, secp256k1::SECP256K1, Amount, FeeRate, Network},
+        bitcoin::{Amount, FeeRate, Network, bip32::Xpriv, secp256k1::SECP256K1},
         keys::{DescriptorPublicKey, SinglePub, SinglePubKey},
-        miniscript::{descriptor::TapTree, Descriptor, Miniscript},
+        miniscript::{Descriptor, Miniscript, descriptor::TapTree},
     };
     use rand_core::OsRng;
     use strata_asm_proto_bridge_v1_txs::deposit_request::parse_drt;

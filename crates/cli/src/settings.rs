@@ -1,8 +1,8 @@
 use std::{
     env::var,
-    fs::{create_dir_all, File},
+    fs::{File, create_dir_all},
     io,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, LazyLock},
 };
@@ -19,7 +19,7 @@ use strata_l1_txfmt::MagicBytes;
 use terrors::OneOf;
 
 use crate::{
-    bitcoin::{backend::BitcoinBackend, EsploraClient},
+    bitcoin::{EsploraClient, backend::BitcoinBackend},
     constants::*,
 };
 #[cfg(feature = "test-mode")]
@@ -135,8 +135,22 @@ pub static CONFIG_FILE: LazyLock<PathBuf> = LazyLock::new(|| match var(CONFIG_FI
 
 impl Settings {
     pub fn load() -> Result<Self, OneOf<(io::Error, config::ConfigError)>> {
-        let proj_dirs = &PROJ_DIRS;
-        let config_file = CONFIG_FILE.as_path();
+        Self::load_from(&PROJ_DIRS, CONFIG_FILE.as_path())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn load_from_paths(
+        project_root: PathBuf,
+        config_file: &Path,
+    ) -> Result<Self, OneOf<(io::Error, config::ConfigError)>> {
+        let proj_dirs = ProjectDirs::from_path(project_root).expect("valid project path");
+        Self::load_from(&proj_dirs, config_file)
+    }
+
+    fn load_from(
+        proj_dirs: &ProjectDirs,
+        config_file: &Path,
+    ) -> Result<Self, OneOf<(io::Error, config::ConfigError)>> {
         let linux_seed_file = proj_dirs.data_dir().to_owned().join("seed");
 
         create_dir_all(proj_dirs.config_dir()).map_err(OneOf::new)?;
@@ -211,7 +225,7 @@ impl Settings {
             )
             .expect("valid Alpen address"),
             linux_seed_file,
-            config_file: CONFIG_FILE.clone(),
+            config_file: config_file.to_owned(),
             bitcoin_backend: sync_backend,
             bridge_fee: from_file
                 .bridge_fee_sats

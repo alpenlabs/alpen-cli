@@ -7,11 +7,11 @@ use std::{
     string::FromUtf8Error,
 };
 
-use aes_gcm_siv::{aead::AeadMutInPlace, Aes256GcmSiv, KeyInit, Nonce, Tag};
+use aes_gcm_siv::{Aes256GcmSiv, KeyInit, Nonce, Tag, aead::AeadMutInPlace};
 use bdk_wallet::{
-    bitcoin::{constants::ChainHash, Network},
+    bitcoin::{Network, constants::ChainHash},
     keys::{DescriptorPublicKey, DescriptorSecretKey},
-    miniscript::{self, descriptor::DescriptorKeyParseError, Descriptor},
+    miniscript::{self, Descriptor, descriptor::DescriptorKeyParseError},
     template::DescriptorTemplateOut,
 };
 use make_buf::make_buf;
@@ -434,7 +434,7 @@ mod tests {
     // The counter must never repeat across a process restart, since a reused counter would
     // derive the same reclaim key for two different deposit requests.
     async fn next_reclaim_counter_survives_reopen() {
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
         let path = temp_db_path();
 
         let recovery = DescriptorRecovery::open(&seed, &path)
@@ -461,7 +461,7 @@ mod tests {
 
     #[tokio::test]
     async fn missing_reclaim_counter_must_be_reconstructed_before_allocation() {
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
         let path = temp_db_path();
         let recovery = DescriptorRecovery::open(&seed, &path)
             .await
@@ -476,7 +476,7 @@ mod tests {
 
     #[tokio::test]
     async fn reconstructed_reclaim_counter_never_rolls_back() {
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
         let path = temp_db_path();
         let recovery = DescriptorRecovery::open(&seed, &path)
             .await
@@ -501,7 +501,7 @@ mod tests {
     // `DescriptorRecoveryKey::decode(&key).unwrap()` panicked on it. `alpen debug recovery`
     // calls `read_descs(..)` on any populated database, so this used to panic on every deposit.
     async fn read_descs_ignores_reclaim_counter_state() {
-        let seed = Seed::gen(&mut OsRng);
+        let seed = Seed::generate(&mut OsRng);
         let path = temp_db_path();
 
         let mut recovery = DescriptorRecovery::open(&seed, &path)

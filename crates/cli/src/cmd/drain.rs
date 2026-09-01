@@ -15,7 +15,7 @@ use strata_cli_common::errors::{DisplayableError, DisplayedError};
 
 use crate::{
     alpen::AlpenWallet,
-    bitcoin::{get_fee_rate, log_fee_rate, BitcoinWallet},
+    bitcoin::{BitcoinWallet, get_fee_rate, log_fee_rate},
     constants::SATS_TO_WEI,
     link::{OnchainObject, PrettyPrint},
     seed::Seed,

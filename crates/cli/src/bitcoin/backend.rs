@@ -10,19 +10,19 @@ use std::{
 
 use async_trait::async_trait;
 use bdk_bitcoind_rpc::{
-    bitcoincore_rpc::{self, json::EstimateMode, RpcApi},
     BlockEvent, Emitter, NO_EXPECTED_MEMPOOL_TXIDS,
+    bitcoincore_rpc::{self, RpcApi, json::EstimateMode},
 };
 use bdk_esplora::EsploraAsyncExt;
 use bdk_wallet::{
-    bitcoin::{consensus::encode, Block, FeeRate, ScriptBuf, Transaction},
+    KeychainKind,
+    bitcoin::{Block, FeeRate, ScriptBuf, Transaction, consensus::encode},
     chain::{
+        CheckPoint,
         spk_client::{
             FullScanRequestBuilder, FullScanResponse, SyncRequest, SyncRequestBuilder, SyncResponse,
         },
-        CheckPoint,
     },
-    KeychainKind,
 };
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use terrors::OneOf;
@@ -451,7 +451,7 @@ pub struct InvalidFee;
 
 #[cfg(test)]
 mod tests {
-    use bdk_wallet::bitcoin::{absolute, transaction, Amount, TxOut};
+    use bdk_wallet::bitcoin::{Amount, TxOut, absolute, transaction};
 
     use super::*;
 

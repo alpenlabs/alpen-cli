@@ -7,8 +7,8 @@ use alloy::{
 use alpen_reth_primitives::WithdrawalCalldata;
 use argh::FromArgs;
 use bdk_wallet::{
-    bitcoin::{Address, Amount},
     KeychainKind,
+    bitcoin::{Address, Amount},
 };
 use indicatif::ProgressBar;
 use strata_bridge_params::BridgeParams;

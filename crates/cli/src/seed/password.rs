@@ -1,7 +1,7 @@
 use argon2::{Algorithm, Argon2, Params, Version};
 use dialoguer::Password as InputPassword;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
-use zxcvbn::{zxcvbn, Entropy};
+use zxcvbn::{Entropy, zxcvbn};
 
 use super::PW_SALT_LEN;
 
