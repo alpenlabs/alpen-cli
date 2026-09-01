@@ -1,20 +1,32 @@
 [workspace]
-members = ["crates/foo"]
+members = ["crates/cli"]
 resolver = "2"
 
 [workspace.package]
-version = "0.0.0" # CHANGEME
-edition = "2024" # CHANGEME
+version = "0.3.3"
+edition = "2021"
 authors = [
-  "John Doe <noreply@alpenlabs.io>",  # CHANGEME
-  "Janet Doe <noreply@alpenlabs.io>", # CHANGEME
+  "Aaron Feickert <66188213+AaronFeickert@users.noreply.github.com>",
+  "Abishek Bashyal <abishek@alpenlabs.io>",
+  "Ashish Thapa <ashish@alpenlabs.io>",
+  "Azz <azz@alpenlabs.io>",
+  "Barak Shani <35497694+barakshani@users.noreply.github.com>",
+  "Bibek Pandey <bibek@alpenlabs.io>",
+  "Dilli Raj Paudel <krsnapaudel@hotmail.com>",
+  "Evgeny Zdanovich <zdanovichevgeny@gmail.com>",
+  "Jose Storopoli <jose@storopoli.com>",
+  "Prajwol Gyawali <prajwol@alpenlabs.io>",
+  "Pranjal Pokharel <pranjalpokharel007@gmail.com>",
+  "Purushotam <purushotam@alpenlabs.io>",
+  "Sapin Bajracharya <sapin@alpenlabs.io>",
+  "Trey Del Bonis <trey@alpenlabs.io>",
 ]
-description = "Alpen Rust Workspace Template" # CHANGEME
-license = "MIT OR Apache-2.0" # CHANGEME
+description = "Command-line wallet for managing Bitcoin and Alpen funds and interacting with the Strata bridge"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/alpenlabs/rust-template-workspace" # CHANGEME
-categories = ["cryptography::cryptocurrencies"] # CHANGEME
-keywords = ["crypto", "bitcoin"] # CHANGEME
+repository = "https://github.com/alpenlabs/alpen-cli"
+categories = ["cryptography::cryptocurrencies"]
+keywords = ["crypto", "bitcoin"]
 
 [workspace.lints]
 rust.missing_debug_implementations = "warn"
@@ -25,11 +37,51 @@ rust.unused_must_use = "deny"
 rust.unexpected_cfgs = { level = "warn", check-cfg = [
   'cfg(coverage, coverage_nightly)',
 ] }
-rust.missing_docs = "warn"
+clippy.allow_attributes = "warn"
+clippy.allow_attributes_without_reason = "warn"
+clippy.absolute_paths = "warn"
 rustdoc.all = "warn"
-clippy.too_long_first_doc_paragraph = "warn"
 
 [workspace.dependencies]
+# Alpen execution environment. This is the repository-split commit whose
+# alpen-reth-primitives source matches the releases/0.3.0 source exactly.
+alpen-reth-primitives = { git = "https://github.com/alpenlabs/alpen-ee", rev = "2015dadfcba1daa002be2f9702f86a1780ffe376" }
+
+# Shared Alpen crates. This is the revision consumed by alpen-ee at the split
+# point above, so types crossing the repository boundary have one source.
+strata-bridge-params = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
+strata-cli-common = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
+strata-ol-bridge-types = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
+strata-primitives = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
+strata-test-utils-btcio = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
+
+# Strata protocol crates.
+strata-asm-proto-bridge-v1-txs = { git = "https://github.com/alpenlabs/asm", tag = "v0.3.0-rc.2" }
+strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0-rc.2" }
+strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0-rc.2" }
+
+# Third-party dependencies inherited by the CLI crate.
+alloy = "1.0.41"
+argh = "0.1"
+async-trait = "0.1.80"
+bdk_bitcoind_rpc = "0.17.1"
+bdk_esplora = { version = "0.20.1", default-features = false, features = [
+  "async-https",
+  "async-https-rustls",
+  "tokio",
+] }
+bdk_wallet = "1.0.0"
+chrono = "0.4.44"
+make_buf = { git = "https://github.com/alpenlabs/make_buf", version = "1.0.2" }
+rand_core = { version = "0.6", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10.8"
+shrex = { version = "1", features = ["serde"] }
+sled = "0.34.7"
+terrors = "0.3.0"
+tokio = { version = "1.52", features = ["full"] }
+toml = "0.5"
+zeroize = { version = "1.8.1", features = ["derive"] }
 
 [profile.release]
 opt-level = "z"   # Optimized for size, use 3 for speed
