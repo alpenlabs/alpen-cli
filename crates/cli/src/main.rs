@@ -12,6 +12,7 @@ pub mod settings;
 
 use std::process::exit;
 
+use alpen_cli as _;
 use bitcoin::persist::set_data_dir;
 use cmd::{
     backup::backup, balance::balance, config::config, deposit::deposit, drain::drain,
