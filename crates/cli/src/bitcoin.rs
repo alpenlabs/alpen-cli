@@ -13,8 +13,9 @@ use std::{
 use backend::{BitcoinBackend, ScanError, SyncError, UpdateError, WalletUpdate};
 use bdk_esplora::esplora_client::{self, AsyncClient};
 use bdk_wallet::{
-    PersistedWallet, Wallet,
+    KeychainKind, PersistedWallet, Wallet,
     bitcoin::{FeeRate, Network},
+    chain::keychain_txout::DEFAULT_LOOKAHEAD,
 };
 use persist::Persister;
 use rusqlite::{self, Connection};
@@ -64,8 +65,10 @@ pub(crate) mod tests {
     use super::{
         BitcoinBackend, BitcoinWallet, SyncError,
         backend::{BroadcastTxError, GetFeeRateError, InvalidFee, ScanError, UpdateSender},
-        get_fee_rate,
+        RECOVERY_LOOKAHEAD, get_fee_rate, reveal_recovery_range,
     };
+    use crate::{constants::SEED_LEN, seed::Seed};
+    use shrex::Hex;
 
     #[derive(Debug)]
     pub(crate) struct TestBitcoinBackend {
@@ -153,6 +156,36 @@ pub(crate) mod tests {
             data_dir.join("default.sqlite")
         );
     }
+
+    #[test]
+    fn recovery_range_survives_wallet_reload() {
+        let seed = Seed::from_file(Hex([0; SEED_LEN]));
+        let (load, create) = seed.bitcoin_wallet(Network::Signet).split();
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        let mut wallet = create
+            .network(Network::Signet)
+            .create_wallet(&mut connection)
+            .unwrap();
+
+        reveal_recovery_range(&mut wallet);
+        wallet.persist(&mut connection).unwrap();
+        drop(wallet);
+
+        let wallet = load
+            .check_network(Network::Signet)
+            .load_wallet(&mut connection)
+            .unwrap()
+            .unwrap();
+        let last_recovery_index = RECOVERY_LOOKAHEAD - 1;
+        assert_eq!(
+            wallet.derivation_index(KeychainKind::External),
+            Some(last_recovery_index)
+        );
+        assert_eq!(
+            wallet.derivation_index(KeychainKind::Internal),
+            Some(last_recovery_index)
+        );
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -206,14 +239,17 @@ impl BitcoinWallet {
         sync_backend: Arc<dyn BitcoinBackend>,
     ) -> io::Result<Self> {
         let (load, create) = seed.bitcoin_wallet(network).split();
+        let lookahead = recovery_lookahead();
         Ok(Self {
             wallet: load
                 .check_network(network)
+                .lookahead(lookahead)
                 .load_wallet(&mut Persister)
                 .expect("should be able to load wallet")
                 .unwrap_or_else(|| {
                     create
                         .network(network)
+                        .lookahead(lookahead)
                         .create_wallet(&mut Persister)
                         .expect("wallet creation to succeed")
                 }),
@@ -221,20 +257,83 @@ impl BitcoinWallet {
         })
     }
 
-    pub async fn sync(&mut self) -> Result<(), OneOf<(UpdateError, SyncError, rusqlite::Error)>> {
-        sync_wallet(&mut self.wallet, self.sync_backend.clone()).await?;
+    /// Syncs already-revealed addresses. Until a full scan has completed at
+    /// least once for this wallet (e.g. right after a fresh recovery from
+    /// seed), this runs a full scan instead, since a plain sync can never
+    /// discover funds sitting at indices the wallet doesn't know about yet.
+    pub async fn sync(
+        &mut self,
+    ) -> Result<(), OneOf<(UpdateError, SyncError, ScanError, rusqlite::Error)>> {
+        let needs_full_scan = !Persister::full_scan_completed().map_err(OneOf::new)?;
+        if needs_full_scan {
+            scan_wallet(&mut self.wallet, self.sync_backend.clone())
+                .await
+                .map_err(OneOf::broaden)?;
+            reveal_recovery_range(&mut self.wallet);
+        } else {
+            sync_wallet(&mut self.wallet, self.sync_backend.clone())
+                .await
+                .map_err(OneOf::broaden)?;
+        }
+        // Persist the scan results before recording completion, so a crash
+        // in between leaves us re-scanning next time rather than silently
+        // skipping a scan we never actually saved the results of.
         self.persist().map_err(OneOf::new)?;
+        if needs_full_scan {
+            Persister::mark_full_scan_completed().map_err(OneOf::new)?;
+        }
         Ok(())
     }
 
     pub async fn scan(&mut self) -> Result<(), OneOf<(UpdateError, ScanError, rusqlite::Error)>> {
+        let needs_recovery_range = !Persister::full_scan_completed().map_err(OneOf::new)?;
         scan_wallet(&mut self.wallet, self.sync_backend.clone()).await?;
+        if needs_recovery_range {
+            reveal_recovery_range(&mut self.wallet);
+        }
         self.persist().map_err(OneOf::new)?;
+        Persister::mark_full_scan_completed().map_err(OneOf::new)?;
         Ok(())
     }
 
     pub fn persist(&mut self) -> Result<bool, rusqlite::Error> {
         self.wallet.persist(&mut Persister)
+    }
+}
+
+/// Number of addresses cached and retained during the scan that follows a
+/// restore from seed.
+///
+/// The Bitcoin Core backend never uses the Esplora `stop_gap`. It replays
+/// each block once and only recognizes an address already held in this
+/// cache, so a payment that confirms out of derivation order is missed for
+/// good. That one pass from genesis to the tip is the only chance to find
+/// old addresses, because the emitter resumes from the agreed tip
+/// afterwards. A wide cache makes payment order irrelevant below this
+/// index.
+const RECOVERY_LOOKAHEAD: u32 = 1000;
+
+/// Retains the recovery range across restarts so an address issued before a
+/// restore remains discoverable even if it receives its first payment later.
+fn reveal_recovery_range(wallet: &mut Wallet) {
+    let last_recovery_index = RECOVERY_LOOKAHEAD - 1;
+    for keychain in [KeychainKind::External, KeychainKind::Internal] {
+        wallet
+            .reveal_addresses_to(keychain, last_recovery_index)
+            .for_each(drop);
+    }
+}
+
+/// Picks how many addresses to cache ahead of the last known one.
+///
+/// Only the scan that follows a restore needs the wide cache, so every
+/// later command pays the default. A database error keeps the wide value,
+/// since an unnecessarily wide cache is harmless but a narrow one during
+/// recovery loses coins.
+fn recovery_lookahead() -> u32 {
+    match Persister::full_scan_completed() {
+        Ok(true) => DEFAULT_LOOKAHEAD,
+        Ok(false) | Err(_) => RECOVERY_LOOKAHEAD,
     }
 }
 
