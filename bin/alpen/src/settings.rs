@@ -142,6 +142,8 @@ pub struct SettingsFromFile {
     pub bitcoind_rpc_endpoint: Option<String>,
     /// Alpen network RPC endpoint.
     pub alpen_endpoint: String,
+    /// Faucet service endpoint.
+    pub faucet_endpoint: String,
     /// Mempool explorer endpoint.
     pub mempool_endpoint: Option<String>,
     /// Blockscout explorer endpoint.
@@ -199,6 +201,7 @@ pub struct SettingsFromFile {
 pub struct Settings {
     pub esplora: Option<String>,
     pub alpen_endpoint: String,
+    pub faucet_endpoint: String,
     /// Root containing shared and per-profile wallet state.
     pub data_root: PathBuf,
     pub data_dir: PathBuf,
@@ -367,6 +370,7 @@ impl Settings {
         Ok(Settings {
             esplora: from_file.esplora,
             alpen_endpoint: from_file.alpen_endpoint,
+            faucet_endpoint: from_file.faucet_endpoint,
             data_root: proj_dirs.data_dir().to_owned(),
             data_dir: profile_data_dir,
             bridge_musig2_pubkey: from_file.bridge_pubkey,
@@ -549,6 +553,7 @@ mod tests {
             r#"
                 esplora = "https://esplora.example.com"
                 alpen_endpoint = "{alpen_endpoint}"
+                faucet_endpoint = "https://faucet.example.com"
                 bridge_pubkey = "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7"
                 network = "{network}"
                 magic_bytes = "ALPN"
@@ -722,6 +727,7 @@ mod tests {
             bitcoind_rpc_pw = "pass"
             bitcoind_rpc_endpoint = "http://127.0.0.1:38332"
             alpen_endpoint = "https://rpc.testnet.alpenlabs.io"
+            faucet_endpoint = "https://faucet-api.testnet.alpenlabs.io"
             mempool_endpoint = "https://bitcoin.testnet.alpenlabs.io"
             blockscout_endpoint = "https://explorer.testnet.alpenlabs.io"
             bridge_pubkey = "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7"
@@ -753,6 +759,7 @@ mod tests {
         // Assert important fields survived round-trip
         assert_eq!(parsed.esplora, reparsed.esplora);
         assert_eq!(parsed.alpen_endpoint, reparsed.alpen_endpoint);
+        assert_eq!(parsed.faucet_endpoint, reparsed.faucet_endpoint);
         assert_eq!(parsed.bridge_pubkey, reparsed.bridge_pubkey);
         assert_eq!(parsed.network, reparsed.network);
         assert_eq!(parsed.network, Network::Bitcoin);

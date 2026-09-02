@@ -44,7 +44,9 @@ dialoguer.workspace = true
 directories.workspace = true
 indicatif.workspace = true
 rand_core.workspace = true
+reqwest.workspace = true
 serde.workspace = true
+sha2 = { workspace = true, features = ["loongarch64_asm"] }
 shrex.workspace = true
 strata-bridge-params.workspace = true
 strata-cli-common.workspace = true
