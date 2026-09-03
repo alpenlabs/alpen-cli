@@ -17,7 +17,7 @@ use bdk_wallet::{
 use colored::Colorize;
 use indicatif::ProgressBar;
 use shrex::encode;
-use strata_asm_proto_bridge_v1_txs::deposit_request::DrtHeaderAux;
+use strata_asm_proto_bridge_txs::deposit_request::DrtHeaderAux;
 use strata_cli_common::errors::{DisplayableError, DisplayedError};
 use strata_identifiers::SubjectIdBytes;
 use strata_l1_txfmt::{MagicBytes, ParseConfig};
@@ -310,7 +310,7 @@ mod tests {
         miniscript::{Descriptor, Miniscript, descriptor::TapTree},
     };
     use rand_core::OsRng;
-    use strata_asm_proto_bridge_v1_txs::deposit_request::parse_drt;
+    use strata_asm_proto_bridge_txs::deposit_request::parse_drt;
     use strata_primitives::constants::RECOVER_DELAY;
     use strata_test_utils_btcio::BtcioTestHarness;
 

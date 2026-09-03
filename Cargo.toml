@@ -43,22 +43,21 @@ clippy.absolute_paths = "warn"
 rustdoc.all = "warn"
 
 [workspace.dependencies]
-# Alpen execution environment. This is the repository-split commit whose
-# alpen-reth-primitives source matches the releases/0.3.0 source exactly.
-alpen-reth-primitives = { git = "https://github.com/alpenlabs/alpen-ee", rev = "2015dadfcba1daa002be2f9702f86a1780ffe376" }
+# Alpen execution types aligned with the ASM v0.4 bridge types.
+alpen-reth-primitives = { git = "https://github.com/alpenlabs/alpen.git", rev = "efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b" }
 
-# Shared Alpen crates. This is the revision consumed by alpen-ee at the split
-# point above, so types crossing the repository boundary have one source.
+# Shared Alpen crates. Bridge types are aligned with ASM v0.4; the others remain
+# at the repository-split revision.
 strata-bridge-params = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
 strata-cli-common = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
-strata-ol-bridge-types = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
+strata-ol-bridge-types = { git = "https://github.com/alpenlabs/alpen.git", rev = "efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b" }
 strata-primitives = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
 strata-test-utils-btcio = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
 
 # Strata protocol crates.
-strata-asm-proto-bridge-v1-txs = { git = "https://github.com/alpenlabs/asm", tag = "v0.3.0-rc.2" }
-strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0-rc.2" }
-strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0-rc.2" }
+strata-asm-proto-bridge-txs = { git = "https://github.com/alpenlabs/asm", tag = "v0.4.0-rc.1" }
+strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0" }
+strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0" }
 
 # Third-party dependencies inherited by the CLI crate.
 aes-gcm-siv = "0.11.1"
