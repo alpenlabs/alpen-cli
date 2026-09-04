@@ -274,7 +274,7 @@ impl BitcoinWallet {
 /// old addresses, because the emitter resumes from the agreed tip
 /// afterwards. A wide cache makes payment order irrelevant below this
 /// index.
-const RECOVERY_LOOKAHEAD: u32 = 1000;
+const RECOVERY_LOOKAHEAD: u32 = 50;
 
 /// Picks how many addresses to cache ahead of the last known one.
 ///
