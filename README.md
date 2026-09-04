@@ -66,6 +66,21 @@ alpen config
 The configuration selects the Bitcoin backend and network parameters used by
 the wallet. Network parameters must match the deployed ASM and OL configuration.
 
+Two optional client-side settings tune wallet recovery:
+
+```toml
+# Addresses cached beyond the last known address during Bitcoin Core's initial
+# full recovery scan. Ignored by Esplora and after the first full scan.
+recovery_lookahead = 50
+
+# Consecutive unused deposit reclaim-key counters that end seed recovery.
+seed_recovery_gap_limit = 50
+```
+
+Both values default to `50` and must be greater than `0`. A smaller
+`seed_recovery_gap_limit` stops recovery after fewer unused counters, which can
+miss later deposits, and makes Bitcoin Core replay the chain in smaller batches.
+
 List the available commands with:
 
 ```sh
