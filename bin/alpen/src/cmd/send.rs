@@ -59,6 +59,7 @@ pub async fn send(args: SendArgs, seed: Seed, settings: Settings) -> Result<(), 
             let mut l1w = BitcoinWallet::new(
                 seed.bitcoin_wallet(settings.network),
                 settings.network,
+                settings.recovery_lookahead,
                 settings.bitcoin_backend.clone(),
             )
             .internal_error("Failed to load Bitcoin wallet")?;
