@@ -9,8 +9,13 @@ use crate::{bitcoin::BitcoinWallet, seed::Seed, settings::Settings};
 pub struct ScanArgs {}
 
 pub async fn scan(_args: ScanArgs, seed: Seed, settings: Settings) -> Result<(), DisplayedError> {
-    let mut l1w = BitcoinWallet::new(&seed, settings.network, settings.bitcoin_backend.clone())
-        .internal_error("Failed to load Bitcoin wallet")?;
+    let mut l1w = BitcoinWallet::new(
+        &seed,
+        settings.network,
+        settings.recovery_lookahead,
+        settings.bitcoin_backend.clone(),
+    )
+    .internal_error("Failed to load Bitcoin wallet")?;
     l1w.scan()
         .await
         .internal_error("Failed to scan Bitcoin wallet")?;

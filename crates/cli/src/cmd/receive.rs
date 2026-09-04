@@ -28,9 +28,13 @@ pub async fn receive(
 
     let address = match chain {
         Chain::Bitcoin => {
-            let mut l1w =
-                BitcoinWallet::new(&seed, settings.network, settings.bitcoin_backend.clone())
-                    .internal_error("Failed to load Bitcoin wallet")?;
+            let mut l1w = BitcoinWallet::new(
+                &seed,
+                settings.network,
+                settings.recovery_lookahead,
+                settings.bitcoin_backend.clone(),
+            )
+            .internal_error("Failed to load Bitcoin wallet")?;
 
             println!("Syncing Bitcoin wallet...");
             l1w.sync()
