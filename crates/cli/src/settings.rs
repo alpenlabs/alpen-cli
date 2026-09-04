@@ -80,6 +80,8 @@ pub struct SettingsFromFile {
     ///
     /// Must match the Bridge subprotocol recovery delay in the ASM params.
     pub recovery_delay: u16,
+    /// Number of addresses cached beyond the last known address during an initial recovery scan.
+    pub recovery_lookahead: Option<u32>,
     /// Maximum withdrawal amount in satoshis. Defaults to leave withdrawals uncapped.
     ///
     /// Withdrawals are batched in multiples of the denomination up to this cap, so
@@ -118,6 +120,8 @@ pub struct Settings {
     pub magic_bytes: MagicBytes,
     /// Deposit-request reclaim delay in Bitcoin blocks.
     pub recovery_delay: u16,
+    /// Addresses cached beyond the last known address during an initial recovery scan.
+    pub recovery_lookahead: u32,
     #[cfg(feature = "test-mode")]
     pub seed: Seed,
 }
@@ -229,10 +233,15 @@ impl Settings {
             network: from_file.network,
             magic_bytes: from_file.magic_bytes,
             recovery_delay: from_file.recovery_delay,
+            recovery_lookahead: resolve_recovery_lookahead(from_file.recovery_lookahead),
             #[cfg(feature = "test-mode")]
             seed: Seed::from_file(from_file.seed),
         })
     }
+}
+
+fn resolve_recovery_lookahead(configured: Option<u32>) -> u32 {
+    configured.unwrap_or(DEFAULT_RECOVERY_LOOKAHEAD)
 }
 
 const X_ONLY_PUBLIC_KEY_HEX_LENGTH: usize = 64;
@@ -299,6 +308,7 @@ mod tests {
         assert_eq!(parsed.magic_bytes, MagicBytes::new(*b"ALPN"));
         assert_eq!(parsed.bridge_denomination_sats, 100_000_000);
         assert_eq!(parsed.recovery_delay, 1_008);
+        assert_eq!(parsed.recovery_lookahead, None);
         assert_eq!(parsed.max_withdrawal_amount_sats, Some(1_000_000_000));
         assert_eq!(parsed.max_withdrawal_descriptor_len, 81);
     }
@@ -318,6 +328,7 @@ mod tests {
             magic_bytes = "ALPN"
             bridge_denomination_sats = 100_000_000
             recovery_delay = 1008
+            recovery_lookahead = 75
             max_withdrawal_descriptor_len = 81
             seed = "000102030405060708090a0b0c0d0e0f"
         "#;
@@ -349,10 +360,18 @@ mod tests {
             reparsed.bridge_denomination_sats
         );
         assert_eq!(parsed.recovery_delay, reparsed.recovery_delay);
+        assert_eq!(parsed.recovery_lookahead, Some(75));
+        assert_eq!(parsed.recovery_lookahead, reparsed.recovery_lookahead);
         assert_eq!(
             parsed.max_withdrawal_descriptor_len,
             reparsed.max_withdrawal_descriptor_len
         );
+    }
+
+    #[test]
+    fn test_recovery_lookahead_defaults_to_50() {
+        assert_eq!(resolve_recovery_lookahead(None), 50);
+        assert_eq!(resolve_recovery_lookahead(Some(75)), 75);
     }
 
     #[test]

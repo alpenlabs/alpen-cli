@@ -8,6 +8,9 @@ use strata_identifiers::{AccountSerial, SYSTEM_RESERVED_ACCTS};
 /// reorgs that might happen.
 pub const DEFAULT_FINALITY_DEPTH: u32 = 6;
 
+/// Number of addresses cached beyond the last known address during an initial recovery scan.
+pub const DEFAULT_RECOVERY_LOOKAHEAD: u32 = 50;
+
 pub const RECOVERY_DESC_CLEANUP_DELAY: u32 = 100;
 
 /// Number of consecutive unused reclaim-key counters `recover --from-seed` tries before giving

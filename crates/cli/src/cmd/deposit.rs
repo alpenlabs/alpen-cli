@@ -144,8 +144,13 @@ pub async fn deposit(
     seed: Seed,
     settings: Settings,
 ) -> Result<(), DisplayedError> {
-    let mut l1w = BitcoinWallet::new(&seed, settings.network, settings.bitcoin_backend.clone())
-        .internal_error("Failed to load Bitcoin wallet")?;
+    let mut l1w = BitcoinWallet::new(
+        &seed,
+        settings.network,
+        settings.recovery_lookahead,
+        settings.bitcoin_backend.clone(),
+    )
+    .internal_error("Failed to load Bitcoin wallet")?;
     let l2w = AlpenWallet::new(&seed, &settings.alpen_endpoint)
         .user_error("Invalid Alpen endpoint URL. Check the config file")?;
 

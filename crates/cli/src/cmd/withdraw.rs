@@ -64,8 +64,13 @@ pub async fn withdraw(
         })
         .transpose()?;
 
-    let mut l1w = BitcoinWallet::new(&seed, settings.network, settings.bitcoin_backend.clone())
-        .internal_error("Failed to load Bitcoin wallet")?;
+    let mut l1w = BitcoinWallet::new(
+        &seed,
+        settings.network,
+        settings.recovery_lookahead,
+        settings.bitcoin_backend.clone(),
+    )
+    .internal_error("Failed to load Bitcoin wallet")?;
     l1w.sync()
         .await
         .internal_error("Failed to sync Bitcoin wallet")?;

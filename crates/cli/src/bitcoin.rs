@@ -63,9 +63,9 @@ pub(crate) mod tests {
     use terrors::OneOf;
 
     use super::{
-        BitcoinBackend, BitcoinWallet, SyncError,
+        BitcoinBackend, BitcoinWallet, DEFAULT_LOOKAHEAD, SyncError,
         backend::{BroadcastTxError, GetFeeRateError, InvalidFee, ScanError, UpdateSender},
-        get_fee_rate,
+        get_fee_rate, lookahead_for_scan_state,
     };
 
     #[derive(Debug)]
@@ -154,6 +154,12 @@ pub(crate) mod tests {
             data_dir.join("default.sqlite")
         );
     }
+
+    #[test]
+    fn uses_recovery_lookahead_until_full_scan_completes() {
+        assert_eq!(lookahead_for_scan_state(false, 50), 50);
+        assert_eq!(lookahead_for_scan_state(true, 50), DEFAULT_LOOKAHEAD);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -204,10 +210,11 @@ impl BitcoinWallet {
     pub fn new(
         seed: &Seed,
         network: Network,
+        recovery_lookahead: u32,
         sync_backend: Arc<dyn BitcoinBackend>,
     ) -> io::Result<Self> {
         let (load, create) = seed.bitcoin_wallet(network).split();
-        let lookahead = recovery_lookahead();
+        let lookahead = selected_lookahead(recovery_lookahead);
         Ok(Self {
             wallet: load
                 .check_network(network)
@@ -264,8 +271,7 @@ impl BitcoinWallet {
     }
 }
 
-/// Number of addresses cached beyond the last known one during the single
-/// scan that follows a restore from seed.
+/// Picks how many addresses to cache beyond the last known one.
 ///
 /// The Bitcoin Core backend never uses the Esplora `stop_gap`. It replays
 /// each block once and only recognizes an address already held in this
@@ -274,18 +280,21 @@ impl BitcoinWallet {
 /// old addresses, because the emitter resumes from the agreed tip
 /// afterwards. A wide cache makes payment order irrelevant below this
 /// index.
-const RECOVERY_LOOKAHEAD: u32 = 1000;
-
-/// Picks how many addresses to cache ahead of the last known one.
 ///
 /// Only the scan that follows a restore needs the wide cache, so every
 /// later command pays the default. A database error keeps the wide value,
 /// since an unnecessarily wide cache is harmless but a narrow one during
 /// recovery loses coins.
-fn recovery_lookahead() -> u32 {
-    match Persister::full_scan_completed() {
-        Ok(true) => DEFAULT_LOOKAHEAD,
-        Ok(false) | Err(_) => RECOVERY_LOOKAHEAD,
+fn selected_lookahead(recovery_lookahead: u32) -> u32 {
+    let full_scan_completed = Persister::full_scan_completed().unwrap_or(false);
+    lookahead_for_scan_state(full_scan_completed, recovery_lookahead)
+}
+
+fn lookahead_for_scan_state(full_scan_completed: bool, recovery_lookahead: u32) -> u32 {
+    if full_scan_completed {
+        DEFAULT_LOOKAHEAD
+    } else {
+        recovery_lookahead
     }
 }
 
