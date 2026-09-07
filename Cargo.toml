@@ -80,7 +80,7 @@ directories = "5.0.1"
 indicatif = { version = "0.18.4", features = ["improved_unicode", "tokio"] }
 keyring = { version = "3.3.0", default-features = false }
 make_buf = { git = "https://github.com/alpenlabs/make_buf", version = "1.0.2" }
-rand_core = { version = "0.6.0", default-features = false }
+rand_core = { version = "0.10.1", default-features = false }
 rusqlite = "0.31.0"
 serde = { version = "1.0.0", features = ["derive"] }
 sha2 = "0.10.8"

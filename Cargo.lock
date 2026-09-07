@@ -756,7 +756,7 @@ dependencies = [
  "indicatif",
  "keyring",
  "make_buf",
- "rand_core 0.6.4",
+ "rand_core 0.10.1",
  "rusqlite",
  "serde",
  "sha2",
