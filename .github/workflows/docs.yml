@@ -36,5 +36,6 @@ jobs:
 
       - name: Check docs leaving the dependencies out
         env:
-          RUSTDOCFLAGS: -A rustdoc::private-doc-tests -D warnings
-        run: cargo doc --no-deps
+          # ssz-gen generic const expressions require the coherence solver on this nightly.
+          RUSTDOCFLAGS: -A rustdoc::private-doc-tests -D warnings -Znext-solver=coherence
+        run: cargo doc --workspace --no-deps --locked

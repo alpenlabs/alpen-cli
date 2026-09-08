@@ -18,6 +18,20 @@ check-fmt:
 clippy:
   cargo clippy --workspace --examples --tests --benches --all-features --all-targets --locked
 
+# Compile each package independently with and without default features
+check-packages:
+  #!/bin/sh
+  set -eu
+  for package in alpen-wallet-keys alpen-wallet-keystore alpen-bitcoin-wallet alpen-wallet alpen-cli; do
+    cargo check --locked -p "$package"
+    cargo check --locked -p "$package" --no-default-features
+  done
+
+# Build documentation for the library APIs
+# ssz-gen generic const expressions need the coherence solver on this nightly.
+docs:
+  RUSTDOCFLAGS="-A rustdoc::private-doc-tests -D warnings -Znext-solver=coherence" cargo doc --workspace --no-deps --locked
+
 # TOML lint with `taplo`
 toml-lint:
   taplo lint
@@ -35,7 +49,7 @@ doctest:
   cargo test --doc --all-features --workspace
 
 # Run all lints and formatting checks
-lints: toml-check-fmt toml-lint check-fmt clippy
+lints: toml-check-fmt toml-lint check-fmt clippy check-packages
 
 # Rust all tests
 test: unit-test doctest

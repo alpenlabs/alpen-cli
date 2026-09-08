@@ -30,6 +30,31 @@ To build the checked-out source instead:
 cargo build --release --locked --bin alpen
 ```
 
+## Workspace
+
+The `alpen-cli` package in `bin/alpen` builds the `alpen` executable. Wallet
+libraries expose operations without terminal prompts or progress rendering:
+
+| Package | Path | Responsibility |
+|---------|------|----------------|
+| `alpen-wallet-keys` | `crates/keys` | Seed derivation, encryption, and password hashing |
+| `alpen-wallet-keystore` | `crates/keystore` | OS credential and file storage for encrypted seeds |
+| `alpen-bitcoin-wallet` | `crates/bitcoin-wallet` | Bitcoin backends, transfers, deposits, and recovery |
+| `alpen-wallet` | `crates/alpen-wallet` | Alpen transfers and bridge withdrawals |
+
+The binary handles configuration, user interaction, and progress events. Wallet
+construction accepts derived Bitcoin wallet parameters or an Alpen signer; the
+wallet libraries do not access the keystore. Seed recovery remains in the Bitcoin
+wallet library and uses the key derivation library.
+
+Package versions and edition are inherited from the workspace, as are dependency
+versions and shared lints. Each package defines its own description and authors.
+Author lists retain contributors from the original `alpen` release-branch CLI
+history, including its earlier `strata-cli` paths, with Jose Storopoli listed first.
+
+Run `just test` and `just lints` to check the entire workspace. Release builds
+continue to use `cargo build --release --locked --bin alpen` without `test-mode`.
+
 ## Configuration
 
 Run the configuration command to locate or update the CLI configuration:

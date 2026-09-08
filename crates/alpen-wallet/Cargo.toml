@@ -1,0 +1,43 @@
+[package]
+name = "alpen-wallet"
+description = "Alpen wallet transfers and bridge withdrawal transactions"
+authors = [
+  "Jose Storopoli <jose@storopoli.com>",
+  "Aaron Feickert <66188213+AaronFeickert@users.noreply.github.com>",
+  "Abishek Bashyal <abishek@alpenlabs.io>",
+  "Ashish Thapa <ashish@alpenlabs.io>",
+  "Azz <azz@alpenlabs.io>",
+  "Barak Shani <35497694+barakshani@users.noreply.github.com>",
+  "Dilli Raj Paudel <krsnapaudel@hotmail.com>",
+  "Prajwol Gyawali <prajwol@alpenlabs.io>",
+  "Pranjal Pokharel <pranjalpokharel007@gmail.com>",
+  "Purushotam <purushotam@alpenlabs.io>",
+  "Sapin Bajracharya <sapin@alpenlabs.io>",
+]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+alloy = { workspace = true, features = [
+  "std",
+  "rpc-client-ws",
+  "network",
+  "signers",
+  "signer-local",
+  "providers",
+  "rpc-types",
+] }
+alpen-reth-primitives.workspace = true
+bdk_wallet.workspace = true
+strata-bridge-params.workspace = true
+strata-cli-common.workspace = true
+strata-ol-bridge-types.workspace = true
+strata-primitives.workspace = true
