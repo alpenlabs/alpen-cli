@@ -34,6 +34,13 @@ jobs:
         with:
           cache-on-failure: true
 
+      - name: Check packages independently with and without default features
+        run: |
+          for package in alpen-wallet-keys alpen-wallet-keystore alpen-bitcoin-wallet alpen-wallet alpen-cli; do
+            cargo check --locked -p "$package"
+            cargo check --locked -p "$package" --no-default-features
+          done
+
       - name: Run clippy
         run: cargo clippy --workspace --examples --tests --benches --all-features --all-targets --locked
         env:

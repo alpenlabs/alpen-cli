@@ -1,0 +1,48 @@
+[package]
+name = "alpen-wallet-keys"
+description = "Seed derivation and encryption for Bitcoin and Alpen wallets"
+authors = [
+  "Jose Storopoli <jose@storopoli.com>",
+  "Aaron Feickert <66188213+AaronFeickert@users.noreply.github.com>",
+  "Ashish Thapa <ashish@alpenlabs.io>",
+  "Azz <azz@alpenlabs.io>",
+  "Bibek Pandey <bibek@alpenlabs.io>",
+  "Dilli Raj Paudel <krsnapaudel@hotmail.com>",
+  "Prajwol Gyawali <prajwol@alpenlabs.io>",
+  "Pranjal Pokharel <pranjalpokharel007@gmail.com>",
+  "Purushotam <purushotam@alpenlabs.io>",
+  "Sapin Bajracharya <sapin@alpenlabs.io>",
+]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+aes-gcm-siv.workspace = true
+alloy = { workspace = true, features = ["network", "signer-local"] }
+argon2.workspace = true
+bdk_wallet.workspace = true
+bip39.workspace = true
+rand_core.workspace = true
+secp256k1 = { workspace = true, features = ["global-context"] }
+sha2 = { workspace = true, features = ["loongarch64_asm"] }
+terrors.workspace = true
+zeroize.workspace = true
+zxcvbn.workspace = true
+
+[features]
+test-mode = []
+
+# sha2 assembly is unavailable on Windows.
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+sha2 = { workspace = true, features = ["asm", "loongarch64_asm"] }
+
+[dev-dependencies]
+shrex.workspace = true

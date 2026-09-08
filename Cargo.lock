@@ -757,35 +757,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "alpen-cli"
+name = "alpen-bitcoin-wallet"
 version = "0.3.5"
 dependencies = [
  "aes-gcm-siv",
  "alloy",
- "alpen-reth-primitives",
- "argh",
- "argon2",
+ "alpen-wallet-keys",
  "async-trait",
  "bdk_bitcoind_rpc",
  "bdk_esplora",
  "bdk_wallet",
- "bip39",
  "chrono",
- "colored",
- "config",
- "dialoguer",
- "directories",
- "indicatif",
- "keyring",
  "make_buf",
  "rand_core 0.6.4",
  "rusqlite",
- "serde",
  "sha2",
- "shrex",
  "sled",
  "strata-asm-proto-bridge-txs",
- "strata-bridge-params",
  "strata-cli-common",
  "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
  "strata-l1-txfmt",
@@ -794,9 +782,40 @@ dependencies = [
  "strata-test-utils-btcio",
  "terrors",
  "tokio",
+]
+
+[[package]]
+name = "alpen-cli"
+version = "0.3.5"
+dependencies = [
+ "aes-gcm-siv",
+ "alloy",
+ "alpen-bitcoin-wallet",
+ "alpen-wallet",
+ "alpen-wallet-keys",
+ "alpen-wallet-keystore",
+ "argh",
+ "argon2",
+ "async-trait",
+ "bdk_bitcoind_rpc",
+ "bdk_wallet",
+ "bip39",
+ "colored",
+ "config",
+ "dialoguer",
+ "directories",
+ "indicatif",
+ "rand_core 0.6.4",
+ "serde",
+ "shrex",
+ "strata-bridge-params",
+ "strata-cli-common",
+ "strata-l1-txfmt",
+ "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257)",
+ "terrors",
+ "tokio",
  "toml",
  "zeroize",
- "zxcvbn",
 ]
 
 [[package]]
@@ -808,6 +827,48 @@ dependencies = [
  "serde",
  "strata-ol-bridge-types",
  "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b)",
+]
+
+[[package]]
+name = "alpen-wallet"
+version = "0.3.5"
+dependencies = [
+ "alloy",
+ "alpen-reth-primitives",
+ "bdk_wallet",
+ "strata-bridge-params",
+ "strata-cli-common",
+ "strata-ol-bridge-types",
+ "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257)",
+]
+
+[[package]]
+name = "alpen-wallet-keys"
+version = "0.3.5"
+dependencies = [
+ "aes-gcm-siv",
+ "alloy",
+ "argon2",
+ "bdk_wallet",
+ "bip39",
+ "rand_core 0.6.4",
+ "secp256k1 0.29.1",
+ "sha2",
+ "shrex",
+ "terrors",
+ "zeroize",
+ "zxcvbn",
+]
+
+[[package]]
+name = "alpen-wallet-keystore"
+version = "0.3.5"
+dependencies = [
+ "alpen-wallet-keys",
+ "bip39",
+ "keyring",
+ "rand_core 0.6.4",
+ "terrors",
 ]
 
 [[package]]

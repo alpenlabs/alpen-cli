@@ -1,0 +1,33 @@
+[package]
+name = "alpen-wallet-keystore"
+description = "Encrypted wallet seed persistence in OS credential stores and files"
+authors = [
+  "Jose Storopoli <jose@storopoli.com>",
+  "Ashish Thapa <ashish@alpenlabs.io>",
+  "Azz <azz@alpenlabs.io>",
+  "Dilli Raj Paudel <krsnapaudel@hotmail.com>",
+  "Sapin Bajracharya <sapin@alpenlabs.io>",
+]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+alpen-wallet-keys.workspace = true
+terrors.workspace = true
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+keyring = { workspace = true, features = ["apple-native"] }
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"] }
+
+[dev-dependencies]
+bip39.workspace = true
+rand_core.workspace = true

@@ -1,0 +1,56 @@
+[package]
+name = "alpen-bitcoin-wallet"
+description = "Bitcoin wallet backends, transactions, deposits, and recovery"
+authors = [
+  "Jose Storopoli <jose@storopoli.com>",
+  "Aaron Feickert <66188213+AaronFeickert@users.noreply.github.com>",
+  "Abishek Bashyal <abishek@alpenlabs.io>",
+  "Ashish Thapa <ashish@alpenlabs.io>",
+  "Azz <azz@alpenlabs.io>",
+  "Barak Shani <35497694+barakshani@users.noreply.github.com>",
+  "Dilli Raj Paudel <krsnapaudel@hotmail.com>",
+  "Evgeny Zdanovich <zdanovichevgeny@gmail.com>",
+  "Prajwol Gyawali <prajwol@alpenlabs.io>",
+  "Pranjal Pokharel <pranjalpokharel007@gmail.com>",
+  "Purushotam <purushotam@alpenlabs.io>",
+  "Sapin Bajracharya <sapin@alpenlabs.io>",
+  "Trey Del Bonis <trey@alpenlabs.io>",
+]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+categories.workspace = true
+keywords.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+aes-gcm-siv.workspace = true
+alloy.workspace = true
+alpen-wallet-keys.workspace = true
+async-trait.workspace = true
+bdk_bitcoind_rpc.workspace = true
+bdk_esplora.workspace = true
+bdk_wallet = { workspace = true, features = ["rusqlite"] }
+chrono.workspace = true
+make_buf.workspace = true
+rand_core.workspace = true
+rusqlite.workspace = true
+sha2.workspace = true
+sled.workspace = true
+strata-asm-proto-bridge-txs.workspace = true
+strata-cli-common.workspace = true
+strata-identifiers.workspace = true
+strata-l1-txfmt.workspace = true
+strata-ol-bridge-types.workspace = true
+strata-primitives.workspace = true
+terrors.workspace = true
+tokio.workspace = true
+
+[target.'cfg(target_env = "musl")'.dependencies]
+rusqlite = { workspace = true, features = ["bundled"] }
+[dev-dependencies]
+strata-test-utils-btcio.workspace = true

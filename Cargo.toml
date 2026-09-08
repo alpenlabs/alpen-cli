@@ -1,27 +1,16 @@
 [workspace]
-members = ["crates/cli"]
+members = [
+  "bin/alpen",
+  "crates/keys",
+  "crates/keystore",
+  "crates/bitcoin-wallet",
+  "crates/alpen-wallet",
+]
 resolver = "2"
 
 [workspace.package]
 version = "0.3.5"
 edition = "2024"
-authors = [
-  "Aaron Feickert <66188213+AaronFeickert@users.noreply.github.com>",
-  "Abishek Bashyal <abishek@alpenlabs.io>",
-  "Ashish Thapa <ashish@alpenlabs.io>",
-  "Azz <azz@alpenlabs.io>",
-  "Barak Shani <35497694+barakshani@users.noreply.github.com>",
-  "Bibek Pandey <bibek@alpenlabs.io>",
-  "Dilli Raj Paudel <krsnapaudel@hotmail.com>",
-  "Evgeny Zdanovich <zdanovichevgeny@gmail.com>",
-  "Jose Storopoli <jose@storopoli.com>",
-  "Prajwol Gyawali <prajwol@alpenlabs.io>",
-  "Pranjal Pokharel <pranjalpokharel007@gmail.com>",
-  "Purushotam <purushotam@alpenlabs.io>",
-  "Sapin Bajracharya <sapin@alpenlabs.io>",
-  "Trey Del Bonis <trey@alpenlabs.io>",
-]
-description = "Command-line wallet for managing Bitcoin and Alpen funds and interacting with the Strata bridge"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/alpenlabs/alpen-cli"
@@ -43,6 +32,11 @@ clippy.absolute_paths = "warn"
 rustdoc.all = "warn"
 
 [workspace.dependencies]
+alpen-bitcoin-wallet = { path = "crates/bitcoin-wallet" }
+alpen-wallet = { path = "crates/alpen-wallet" }
+alpen-wallet-keys = { path = "crates/keys" }
+alpen-wallet-keystore = { path = "crates/keystore" }
+
 # Alpen execution types aligned with the ASM v0.4 bridge types.
 alpen-reth-primitives = { git = "https://github.com/alpenlabs/alpen.git", rev = "efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b" }
 
@@ -82,6 +76,7 @@ keyring = { version = "3.3.0", default-features = false }
 make_buf = { git = "https://github.com/alpenlabs/make_buf", version = "1.0.2" }
 rand_core = { version = "0.6.0", default-features = false }
 rusqlite = "0.31.0"
+secp256k1 = "0.29.1"
 serde = { version = "1.0.0", features = ["derive"] }
 sha2 = "0.10.8"
 shrex = { version = "1.0.0", features = ["serde"] }
