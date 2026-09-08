@@ -13,7 +13,7 @@ pub const RECOVERY_DESC_CLEANUP_DELAY: u32 = 100;
 /// Number of consecutive unused reclaim-key counters `recover --from-seed` tries before giving
 /// up. There's no persisted "last used counter" to resume from when reconstructing purely from the
 /// seed, so this is the only signal for when to stop scanning.
-pub const SEED_RECOVERY_GAP_LIMIT: u32 = 1_000;
+pub const SEED_RECOVERY_GAP_LIMIT: u32 = 50;
 
 /// Fee to cover the mining fees for creating the deposit transaction from the deposit request
 /// transaction. This includes the cost for the bridge to spend the deposit request output into the
