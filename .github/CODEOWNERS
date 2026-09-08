@@ -1,0 +1,15 @@
+# Jose owns repository maintenance, releases, and wallet security by default.
+* @storopoli
+
+# Sensitive wallet components remain under Jose's ownership.
+/crates/keys/ @storopoli
+/crates/keystore/ @storopoli
+/crates/bitcoin-wallet/ @storopoli
+
+# Prajwol is the single core-protocol counterpart for Alpen and bridge operations.
+# More specific rules must follow the broader Bitcoin-wallet rule.
+/crates/alpen-wallet/ @storopoli @prajwolrg
+/crates/bitcoin-wallet/src/bridge/ @storopoli @prajwolrg
+
+# Keep this policy rule last.
+/.github/CODEOWNERS @storopoli @prajwolrg
