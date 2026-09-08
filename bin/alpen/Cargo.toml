@@ -51,7 +51,9 @@ strata-cli-common.workspace = true
 strata-l1-txfmt.workspace = true
 strata-primitives.workspace = true
 terrors.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
+toml_edit.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
