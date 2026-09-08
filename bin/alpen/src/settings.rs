@@ -85,6 +85,10 @@ pub struct SettingsFromFile {
     ///
     /// Must match the Bridge subprotocol recovery delay in the ASM params.
     pub recovery_delay: u16,
+    /// Number of addresses cached beyond the last known address during an initial recovery scan.
+    pub recovery_lookahead: Option<u32>,
+    /// Number of consecutive unused reclaim-key counters checked during seed recovery.
+    pub seed_recovery_gap_limit: Option<u32>,
     /// Maximum withdrawal amount in satoshis. Defaults to leave withdrawals uncapped.
     ///
     /// Withdrawals are batched in multiples of the denomination up to this cap, so
@@ -123,6 +127,10 @@ pub struct Settings {
     pub magic_bytes: MagicBytes,
     /// Deposit-request reclaim delay in Bitcoin blocks.
     pub recovery_delay: u16,
+    /// Addresses cached beyond the last known address during an initial recovery scan.
+    pub recovery_lookahead: u32,
+    /// Consecutive unused reclaim-key counters checked during seed recovery.
+    pub seed_recovery_gap_limit: u32,
     #[cfg(feature = "test-mode")]
     pub seed: Seed,
 }
@@ -214,6 +222,11 @@ impl Settings {
             Network::Bitcoin => "descriptors-bitcoin",
             _ => "descriptors",
         });
+        let seed_recovery_gap_limit =
+            resolve_seed_recovery_gap_limit(from_file.seed_recovery_gap_limit)
+                .map_err(OneOf::new)?;
+        let recovery_lookahead =
+            resolve_recovery_lookahead(from_file.recovery_lookahead).map_err(OneOf::new)?;
 
         Ok(Settings {
             esplora: from_file.esplora,
@@ -242,10 +255,32 @@ impl Settings {
             network: from_file.network,
             magic_bytes: from_file.magic_bytes,
             recovery_delay: from_file.recovery_delay,
+            recovery_lookahead,
+            seed_recovery_gap_limit,
             #[cfg(feature = "test-mode")]
             seed: Seed::from_entropy(*from_file.seed),
         })
     }
+}
+
+fn resolve_recovery_lookahead(configured: Option<u32>) -> Result<u32, ConfigError> {
+    let lookahead = configured.unwrap_or(DEFAULT_RECOVERY_LOOKAHEAD);
+    if lookahead == 0 {
+        return Err(ConfigError::Message(
+            "recovery_lookahead must be greater than 0".to_owned(),
+        ));
+    }
+    Ok(lookahead)
+}
+
+fn resolve_seed_recovery_gap_limit(configured: Option<u32>) -> Result<u32, ConfigError> {
+    let gap_limit = configured.unwrap_or(DEFAULT_SEED_RECOVERY_GAP_LIMIT);
+    if gap_limit < 2 {
+        return Err(ConfigError::Message(
+            "seed_recovery_gap_limit must be at least 2".to_owned(),
+        ));
+    }
+    Ok(gap_limit)
 }
 
 const X_ONLY_PUBLIC_KEY_HEX_LENGTH: usize = 64;
@@ -276,6 +311,8 @@ impl Settings {
             bridge_musig2_pubkey: self.bridge_musig2_pubkey,
             recovery_delay: self.recovery_delay,
             finality_depth: self.finality_depth,
+            recovery_lookahead: self.recovery_lookahead,
+            seed_recovery_gap_limit: self.seed_recovery_gap_limit,
         }
     }
 }
@@ -325,6 +362,8 @@ mod tests {
         assert_eq!(parsed.magic_bytes, MagicBytes::new(*b"ALPN"));
         assert_eq!(parsed.bridge_denomination_sats, 100_000_000);
         assert_eq!(parsed.recovery_delay, 1_008);
+        assert_eq!(parsed.recovery_lookahead, None);
+        assert_eq!(parsed.seed_recovery_gap_limit, None);
         assert_eq!(parsed.max_withdrawal_amount_sats, Some(1_000_000_000));
         assert_eq!(parsed.max_withdrawal_descriptor_len, 81);
     }
@@ -344,6 +383,8 @@ mod tests {
             magic_bytes = "ALPN"
             bridge_denomination_sats = 100_000_000
             recovery_delay = 1008
+            recovery_lookahead = 75
+            seed_recovery_gap_limit = 60
             max_withdrawal_descriptor_len = 81
             seed = "000102030405060708090a0b0c0d0e0f"
         "#;
@@ -375,10 +416,33 @@ mod tests {
             reparsed.bridge_denomination_sats
         );
         assert_eq!(parsed.recovery_delay, reparsed.recovery_delay);
+        assert_eq!(parsed.recovery_lookahead, Some(75));
+        assert_eq!(parsed.recovery_lookahead, reparsed.recovery_lookahead);
+        assert_eq!(parsed.seed_recovery_gap_limit, Some(60));
+        assert_eq!(
+            parsed.seed_recovery_gap_limit,
+            reparsed.seed_recovery_gap_limit
+        );
         assert_eq!(
             parsed.max_withdrawal_descriptor_len,
             reparsed.max_withdrawal_descriptor_len
         );
+    }
+
+    #[test]
+    fn test_recovery_lookahead_defaults_to_50_and_rejects_zero() {
+        assert_eq!(resolve_recovery_lookahead(None).unwrap(), 50);
+        assert_eq!(resolve_recovery_lookahead(Some(75)).unwrap(), 75);
+        assert!(resolve_recovery_lookahead(Some(0)).is_err());
+    }
+
+    #[test]
+    fn test_seed_recovery_gap_limit_defaults_to_50_and_rejects_values_below_2() {
+        assert_eq!(resolve_seed_recovery_gap_limit(None).unwrap(), 50);
+        assert_eq!(resolve_seed_recovery_gap_limit(Some(60)).unwrap(), 60);
+        assert!(resolve_seed_recovery_gap_limit(Some(0)).is_err());
+        assert!(resolve_seed_recovery_gap_limit(Some(1)).is_err());
+        assert_eq!(resolve_seed_recovery_gap_limit(Some(2)).unwrap(), 2);
     }
 
     #[test]

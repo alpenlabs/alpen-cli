@@ -3,7 +3,7 @@ use crate::{
     BitcoinWallet,
     backend::BitcoinBackend,
     bridge::{bridge_in_descriptor, compute_recover_at_height},
-    constants::{RECOVERY_DESC_CLEANUP_DELAY, SEED_RECOVERY_GAP_LIMIT},
+    constants::RECOVERY_DESC_CLEANUP_DELAY,
     get_fee_rate,
     recovery::DescriptorRecovery,
     sync_wallet,
@@ -38,6 +38,8 @@ pub struct RecoveryConfig {
     pub bridge_musig2_pubkey: XOnlyPublicKey,
     pub recovery_delay: u16,
     pub finality_depth: u32,
+    pub recovery_lookahead: u32,
+    pub seed_recovery_gap_limit: u32,
 }
 
 /// Recovery progress reported to the caller for presentation.
@@ -72,6 +74,7 @@ pub async fn recover(
     let mut l1w = BitcoinWallet::new(
         seed.bitcoin_wallet(settings.network),
         settings.network,
+        settings.recovery_lookahead,
         settings.bitcoin_backend.clone(),
     )
     .internal_error("Failed to load Bitcoin wallet")?;
@@ -264,10 +267,10 @@ async fn discover_seed_candidates(
 
     loop {
         let batch_end = batch_start
-            .checked_add(SEED_RECOVERY_GAP_LIMIT)
+            .checked_add(settings.seed_recovery_gap_limit)
             .expect("reclaim-key scan range must fit in u32");
-        let mut candidates = Vec::with_capacity(SEED_RECOVERY_GAP_LIMIT as usize);
-        let mut scripts_to_scan = Vec::with_capacity(SEED_RECOVERY_GAP_LIMIT as usize);
+        let mut candidates = Vec::with_capacity(settings.seed_recovery_gap_limit as usize);
+        let mut scripts_to_scan = Vec::with_capacity(settings.seed_recovery_gap_limit as usize);
 
         for counter in batch_start..batch_end {
             let mut wallet = seed_recovery_wallet(seed, settings, counter)?;
@@ -398,7 +401,49 @@ async fn recover_from_seed(
 
 #[cfg(test)]
 mod tests {
+    use std::{path::PathBuf, str::FromStr};
+
     use super::*;
+    use crate::tests::TestBitcoinBackend;
+
+    #[tokio::test]
+    async fn minimum_gap_limit_discovers_first_allocated_counter() {
+        let seed = Seed::from_entropy([0; 16]);
+        let mut settings = RecoveryConfig {
+            network: Network::Signet,
+            bitcoin_backend: Arc::new(TestBitcoinBackend::default()),
+            descriptor_db: PathBuf::new(),
+            bridge_musig2_pubkey: XOnlyPublicKey::from_str(
+                "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7",
+            )
+            .unwrap(),
+            recovery_delay: 36,
+            finality_depth: 6,
+            recovery_lookahead: 50,
+            seed_recovery_gap_limit: 2,
+        };
+        let mut counter_one_wallet = seed_recovery_wallet(&seed, &settings, 1).unwrap();
+        let counter_one_script = counter_one_wallet
+            .reveal_next_address(KeychainKind::External)
+            .address
+            .script_pubkey();
+        settings.bitcoin_backend = Arc::new(TestBitcoinBackend {
+            used_scripts: HashSet::from([counter_one_script]),
+            ..Default::default()
+        });
+
+        let candidates = discover_seed_candidates(&seed, &settings, &HashSet::new())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            candidates
+                .into_iter()
+                .map(|candidate| candidate.counter)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+    }
 
     #[test]
     fn test_cleanup_delay_not_elapsed_keeps_descriptor() {
