@@ -88,7 +88,7 @@ shrex = { version = "1.0.0", features = ["serde"] }
 sled = "0.34.7"
 terrors = "0.3.0"
 tokio = { version = "1.52.0", features = ["full"] }
-toml = "0.5.0"
+toml = "1.1.4"
 zeroize = { version = "1.8.1", features = ["derive"] }
 zxcvbn = "3.1.0"
 
