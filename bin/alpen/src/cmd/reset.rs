@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, io, path::Path};
 
 use argh::FromArgs;
 use colored::Colorize;
@@ -37,10 +37,37 @@ pub async fn reset(
             .delete()
             .internal_error("Failed to wipe out seed")?;
         println!("Wiped seed");
-        fs::remove_dir_all(settings.data_dir.clone())
-            .internal_error("Failed to delete data directory")?;
+        wipe_data_root(&settings.data_root).internal_error("Failed to delete data directory")?;
         println!("Wiped data directory");
     }
 
     Ok(())
+}
+
+fn wipe_data_root(data_root: &Path) -> io::Result<()> {
+    fs::remove_dir_all(data_root)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs::{create_dir_all, write};
+
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[test]
+    fn reset_wipes_every_profile_directory() {
+        let parent = tempdir().unwrap();
+        let data_root = parent.path().join("data");
+        for profile in ["mainnet", "testnet"] {
+            let profile_dir = data_root.join(profile);
+            create_dir_all(&profile_dir).unwrap();
+            write(profile_dir.join("wallet.sqlite"), profile).unwrap();
+        }
+
+        wipe_data_root(&data_root).unwrap();
+
+        assert!(!data_root.exists());
+    }
 }

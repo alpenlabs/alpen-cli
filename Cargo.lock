@@ -812,9 +812,11 @@ dependencies = [
  "strata-cli-common",
  "strata-l1-txfmt",
  "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257)",
+ "tempfile",
  "terrors",
  "tokio",
  "toml",
+ "toml_edit",
  "zeroize",
 ]
 
@@ -5967,6 +5969,7 @@ dependencies = [
  "indexmap 2.14.1",
  "toml_datetime",
  "toml_parser",
+ "toml_writer",
  "winnow",
 ]
 

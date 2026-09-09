@@ -82,8 +82,10 @@ sha2 = "0.10.8"
 shrex = { version = "1.0.0", features = ["serde"] }
 sled = "0.34.7"
 terrors = "0.3.0"
+tempfile = "3.27.0"
 tokio = { version = "1.52.0", features = ["full"] }
 toml = "1.1.4"
+toml_edit = "0.25.13"
 zeroize = { version = "1.8.1", features = ["derive"] }
 zxcvbn = "3.1.0"
 

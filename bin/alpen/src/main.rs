@@ -18,7 +18,8 @@ use alpen_cli as _;
 use bitcoin::persist::set_data_dir;
 use cmd::{
     Commands, TopLevel, backup::backup, balance::balance, config::config, deposit::deposit,
-    drain::drain, receive::receive, recover::recover, scan::scan, send::send, withdraw::withdraw,
+    drain::drain, network::network, receive::receive, recover::recover, scan::scan, send::send,
+    withdraw::withdraw,
 };
 #[cfg(not(feature = "test-mode"))]
 use cmd::{change_pwd::change_pwd, reset::reset};
@@ -34,10 +35,20 @@ use crate::cmd::debug::debug;
 async fn main() {
     let TopLevel { cmd } = argh::from_env();
 
-    if let Commands::Config(args) = cmd {
-        config(args).await;
-        return;
-    }
+    let cmd = match cmd {
+        Commands::Config(args) => {
+            config(args).await;
+            return;
+        }
+        Commands::Network(args) => {
+            if let Err(error) = network(args).await {
+                eprintln!("Configuration error: {error}");
+                exit(1);
+            }
+            return;
+        }
+        cmd => cmd,
+    };
 
     let settings = Settings::load().unwrap_or_else(|e| {
         eprintln!("Configuration error: {e:?}");
@@ -83,6 +94,7 @@ async fn main() {
         Commands::Scan(args) => scan(args, seed, settings).await,
         Commands::Debug(args) => debug(args, seed, settings).await,
         Commands::Config(_) => unreachable!("handled prior"),
+        Commands::Network(_) => unreachable!("handled prior"),
         #[cfg(not(feature = "test-mode"))]
         Commands::Reset(_) => unreachable!("handled prior"),
     };
