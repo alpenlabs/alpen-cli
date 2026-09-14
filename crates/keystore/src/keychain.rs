@@ -64,14 +64,16 @@ impl EncryptedSeedPersister for KeychainPersister {
     }
 
     fn delete(&self) -> Result<(), PersisterErr> {
-        let entry = Self::entry().map_err(OneOf::broaden)?;
-        if let Err(e) = entry.delete_credential().map_err(keyring_oneof) {
-            // if e is NOT a NoEntry error
-            if let Err(e) = e.narrow::<NoEntry, _>() {
-                panic!("bad error: {e:?}")
+        let entry = Self::entry()?;
+        match entry.delete_credential() {
+            Ok(()) | Err(Error::NoEntry) => Ok(()),
+            Err(Error::NoStorageAccess(error)) => Err(OneOf::new(NoStorageAccess::new(error))),
+            Err(Error::PlatformFailure(error)) => Err(OneOf::new(PlatformFailure::new(error))),
+            Err(error) => {
+                // Preserve other backend errors without widening the public error type.
+                Err(OneOf::new(PlatformFailure::new(error)))
             }
         }
-        Ok(())
     }
 }
 
@@ -170,5 +172,75 @@ fn keyring_oneof(err: keyring::Error) -> OneOf<KeyRingErrors> {
         Error::Invalid(name, reason) => OneOf::new(Invalid { name, reason }),
         Error::Ambiguous(vec) => OneOf::new(Ambiguous(vec)),
         _ => todo!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::any::Any;
+
+    use keyring::{
+        credential::CredentialBuilderApi, default, mock::MockCredential,
+        set_default_credential_builder,
+    };
+
+    use super::*;
+
+    struct FailingDeleteBuilder(fn() -> Error);
+
+    impl CredentialBuilderApi for FailingDeleteBuilder {
+        fn build(
+            &self,
+            _target: Option<&str>,
+            _service: &str,
+            _user: &str,
+        ) -> Result<Box<Credential>, Error> {
+            let credential = MockCredential::default();
+            credential.set_error(self.0());
+            Ok(Box::new(credential))
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    #[test]
+    fn delete_returns_storage_errors_and_accepts_missing_entries() {
+        // Only this unit test uses the global builder; Secret Service runs in a separate binary.
+        set_default_credential_builder(Box::new(FailingDeleteBuilder(|| {
+            Error::NoStorageAccess("keyring locked".into())
+        })));
+        let error = KeychainPersister
+            .delete()
+            .unwrap_err()
+            .narrow::<NoStorageAccess, _>()
+            .unwrap();
+        assert!(format!("{error:?}").contains("keyring locked"));
+
+        set_default_credential_builder(Box::new(FailingDeleteBuilder(|| {
+            Error::PlatformFailure("service disconnected".into())
+        })));
+        let error = KeychainPersister
+            .delete()
+            .unwrap_err()
+            .narrow::<PlatformFailure, _>()
+            .unwrap();
+        assert!(format!("{error:?}").contains("service disconnected"));
+
+        set_default_credential_builder(Box::new(FailingDeleteBuilder(|| {
+            Error::Ambiguous(Vec::new())
+        })));
+        assert!(
+            KeychainPersister
+                .delete()
+                .unwrap_err()
+                .narrow::<PlatformFailure, _>()
+                .is_ok()
+        );
+
+        set_default_credential_builder(Box::new(FailingDeleteBuilder(|| Error::NoEntry)));
+        KeychainPersister.delete().unwrap();
+        set_default_credential_builder(default::default_credential_builder());
     }
 }
