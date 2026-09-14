@@ -49,9 +49,13 @@ strata-primitives = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a4
 strata-test-utils-btcio = { git = "https://github.com/alpenlabs/alpen.git", rev = "3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257" }
 
 # Strata protocol crates.
-strata-asm-proto-bridge-txs = { git = "https://github.com/alpenlabs/asm", tag = "v0.4.0-rc.1" }
+strata-asm-proto-bridge-txs = { git = "https://github.com/alpenlabs/asm", tag = "v0.4.0-rc.4" }
+# Match ASM's VarVec type for the encoded deposit destination.
+strata-codec = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.4.0-rc.2" }
+# Keep identifiers aligned with strata-ol-bridge-types' deposit descriptor.
 strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0" }
-strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.3.0" }
+# Match ASM's TagData type when encoding the deposit-request script.
+strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.4.0-rc.2" }
 
 # Third-party dependencies inherited by the CLI crate.
 aes-gcm-siv = "0.11.1"

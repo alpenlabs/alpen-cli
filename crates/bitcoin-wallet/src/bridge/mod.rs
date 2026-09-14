@@ -14,6 +14,7 @@ use bdk_wallet::{
 };
 use strata_asm_proto_bridge_txs::deposit_request::DrtHeaderAux;
 use strata_cli_common::errors::DisplayedError;
+use strata_codec::VarVec;
 use strata_identifiers::{AccountSerial, SYSTEM_RESERVED_ACCTS, SubjectIdBytes};
 use strata_l1_txfmt::{MagicBytes, ParseConfig};
 use strata_ol_bridge_types::DepositDescriptor;
@@ -95,11 +96,11 @@ pub fn prepare_deposit_request(
         SubjectIdBytes::try_new(alpen_address.to_vec()).expect("must be valid subject bytes");
     let deposit_descriptor = DepositDescriptor::new(ALPEN_EE_ACCT_SERIAL, alpen_subject_bytes)
         .expect("EE serial is within valid range");
-    let header_aux = DrtHeaderAux::new(
-        recovery_public_key.serialize(),
-        deposit_descriptor.encode_to_varvec(),
-    )
-    .expect("header aux creation should succeed");
+    // Cross the Alpen/ASM codec-version boundary using the descriptor's wire bytes.
+    let destination = VarVec::from_vec(deposit_descriptor.encode_to_vec())
+        .expect("deposit descriptor fits within the VarVec bound");
+    let header_aux = DrtHeaderAux::new(recovery_public_key.serialize(), destination)
+        .expect("header aux creation should succeed");
     let deposit_output = TxOut {
         value: bridge_in_amount,
         script_pubkey: bridge_in_address.script_pubkey(),
@@ -283,6 +284,14 @@ mod tests {
         .expect("tx should be built");
         let parsed = parse_drt(&tx).expect("tx should parse as DRT");
         assert_eq!(parsed.header_aux(), &header_aux);
+        let destination =
+            DepositDescriptor::decode_from_slice(parsed.header_aux().destination().inner())
+                .expect("ASM destination should decode as an Alpen deposit descriptor");
+        assert_eq!(destination.dest_acct_serial(), &ALPEN_EE_ACCT_SERIAL);
+        assert_eq!(
+            destination.dest_subject().as_bytes(),
+            alpen_address.as_slice()
+        );
 
         let parsed_output = parsed.deposit_request_output().inner();
         assert_eq!(parsed_output.value, bridge_in_amount);
