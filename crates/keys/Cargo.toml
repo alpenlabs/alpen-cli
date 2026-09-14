@@ -30,8 +30,8 @@ alloy = { workspace = true, features = ["network", "signer-local"] }
 argon2.workspace = true
 bdk_wallet.workspace = true
 bip39.workspace = true
+bitcoin.workspace = true
 rand_core.workspace = true
-secp256k1 = { workspace = true, features = ["global-context"] }
 sha2 = { workspace = true, features = ["loongarch64_asm"] }
 terrors.workspace = true
 zeroize.workspace = true

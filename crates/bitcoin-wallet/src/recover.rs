@@ -8,13 +8,10 @@ use crate::{
     recovery::DescriptorRecovery,
     sync_wallet,
 };
-use alpen_wallet_keys::Seed;
+use alpen_wallet_keys::{SECP256K1, Seed};
 use bdk_wallet::{
     KeychainKind, Wallet,
-    bitcoin::{
-        Address, Amount, FeeRate, Network, PrivateKey, ScriptBuf, Txid, XOnlyPublicKey,
-        secp256k1::SECP256K1,
-    },
+    bitcoin::{Address, Amount, FeeRate, Network, PrivateKey, ScriptBuf, Txid, XOnlyPublicKey},
     chain::ChainOracle,
     coin_selection::InsufficientFunds,
     descriptor::IntoWalletDescriptor,
@@ -243,7 +240,7 @@ fn seed_recovery_wallet(
         settings.recovery_delay,
     );
     let wallet_descriptor = descriptor
-        .into_wallet_descriptor(SECP256K1, settings.network.into())
+        .into_wallet_descriptor(&SECP256K1, settings.network.into())
         .internal_error("Failed to convert to wallet descriptor")?;
 
     Wallet::create_single(wallet_descriptor)

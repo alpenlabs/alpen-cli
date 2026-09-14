@@ -2,20 +2,19 @@
 
 pub mod constants;
 
+use std::sync::LazyLock;
+
 use aes_gcm_siv::{Aes256GcmSiv, KeyInit, Nonce, Tag, aead::AeadMutInPlace};
 use alloy::{network::EthereumWallet, signers::local::PrivateKeySigner};
-use bdk_wallet::{
-    CreateParams, KeychainKind, LoadParams, Wallet,
-    bitcoin::{
-        Network,
-        bip32::{ChildNumber, DerivationPath, Xpriv},
-        secp256k1::{PublicKey, SecretKey},
-    },
-};
+use bdk_wallet::{CreateParams, KeychainKind, LoadParams, Wallet};
 use bip39::{Language, Mnemonic};
+use bitcoin::{
+    Network,
+    bip32::{ChildNumber, DerivationPath, Xpriv},
+    secp256k1::{All, PublicKey, Secp256k1, SecretKey},
+};
 use password::{HashVersion, Password};
 use rand_core::CryptoRngCore;
-use secp256k1::SECP256K1;
 use sha2::{Digest, Sha256};
 use terrors::OneOf;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
@@ -24,6 +23,9 @@ use crate::constants::{
     AES_NONCE_LEN, AES_TAG_LEN, BIP44_ALPEN_EVM_WALLET_PATH, DRT_RECLAIM_PURPOSE, PW_SALT_LEN,
     SEED_LEN,
 };
+
+/// Shared secp256k1 context for wallet key derivation, signing, and verification.
+pub static SECP256K1: LazyLock<Secp256k1<All>> = LazyLock::new(Secp256k1::new);
 
 /// A deposit-request reclaim keypair, deterministically derived from the seed. Zeroizes its own
 /// stored secret-key copy on drop.
@@ -114,10 +116,10 @@ impl Seed {
             ChildNumber::from_hardened_idx(counter).expect("counter fits in 31 bits"),
         ]);
         let derived = rootpriv
-            .derive_priv(SECP256K1, &path)
+            .derive_priv(&SECP256K1, &path)
             .expect("valid derivation path");
         let secret_key = derived.private_key;
-        let public_key = PublicKey::from_secret_key(SECP256K1, &secret_key);
+        let public_key = PublicKey::from_secret_key(&SECP256K1, &secret_key);
         DrtReclaimKeypair {
             secret_key,
             public_key,
@@ -183,7 +185,9 @@ impl Seed {
         let master_key = Xpriv::new_master(Network::Bitcoin, &bip39_seed).expect("valid xpriv");
 
         // Derive the child key for the given path
-        let derived_key = master_key.derive_priv(SECP256K1, &derivation_path).unwrap();
+        let derived_key = master_key
+            .derive_priv(&SECP256K1, &derivation_path)
+            .unwrap();
         let signer =
             PrivateKeySigner::from_slice(derived_key.private_key.secret_bytes().as_slice())
                 .expect("valid slice");
