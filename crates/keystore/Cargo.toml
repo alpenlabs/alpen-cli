@@ -1,6 +1,6 @@
 [package]
 name = "alpen-wallet-keystore"
-description = "Encrypted wallet seed persistence in OS credential stores and files"
+description = "Encrypted wallet seed persistence in OS credential stores"
 authors = [
   "Jose Storopoli <jose@storopoli.com>",
   "Ashish Thapa <ashish@alpenlabs.io>",
@@ -27,7 +27,16 @@ terrors.workspace = true
 keyring = { workspace = true, features = ["apple-native"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { workspace = true, features = ["windows-native"] }
+[target.'cfg(target_os = "linux")'.dependencies]
+# Use zbus's independent async-io runtime: the CLI calls this synchronous API
+# from a current-thread Tokio runtime.
+keyring = { workspace = true, features = [
+  "async-secret-service",
+  "async-io",
+  "crypto-rust",
+] }
 
 [dev-dependencies]
 bip39.workspace = true
 rand_core.workspace = true
+tokio.workspace = true

@@ -1,14 +1,12 @@
 use argh::FromArgs;
 use backup::BackupArgs;
 use balance::BalanceArgs;
-#[cfg(not(feature = "test-mode"))]
 use change_pwd::ChangePwdArgs;
 use config::ConfigArgs;
 use deposit::DepositArgs;
 use drain::DrainArgs;
 use receive::ReceiveArgs;
 use recover::RecoverArgs;
-#[cfg(not(feature = "test-mode"))]
 use reset::ResetArgs;
 use scan::ScanArgs;
 use send::SendArgs;
@@ -31,6 +29,9 @@ pub mod send;
 pub mod withdraw;
 
 /// A CLI for interacting with Alpen and its underlying Bitcoin network.
+///
+/// Wallet seeds are password-encrypted in the OS credential store.
+/// Linux requires an accessible Secret Service, such as GNOME Keyring or KWallet.
 #[derive(FromArgs, PartialEq, Debug)]
 pub struct TopLevel {
     #[argh(subcommand)]
@@ -48,9 +49,7 @@ pub enum Commands {
     Withdraw(WithdrawArgs),
     Send(SendArgs),
     Receive(ReceiveArgs),
-    #[cfg(not(feature = "test-mode"))]
     ChangePwd(ChangePwdArgs),
-    #[cfg(not(feature = "test-mode"))]
     Reset(ResetArgs),
     Scan(ScanArgs),
     Config(ConfigArgs),
@@ -156,7 +155,6 @@ mod tests {
                 bridge_denomination_sats = 200000000
                 recovery_delay = 36
                 max_withdrawal_descriptor_len = 81
-                seed = "000102030405060708090a0b0c0d0e0f"
             "#,
         )
         .expect("test config should be written");

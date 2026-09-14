@@ -38,7 +38,7 @@ libraries expose operations without terminal prompts or progress rendering:
 | Package | Path | Responsibility |
 |---------|------|----------------|
 | `alpen-wallet-keys` | `crates/keys` | Seed derivation, encryption, and password hashing |
-| `alpen-wallet-keystore` | `crates/keystore` | OS credential and file storage for encrypted seeds |
+| `alpen-wallet-keystore` | `crates/keystore` | OS credential storage for encrypted seeds |
 | `alpen-bitcoin-wallet` | `crates/bitcoin-wallet` | Bitcoin backends, transfers, deposits, and recovery |
 | `alpen-wallet` | `crates/alpen-wallet` | Alpen transfers and bridge withdrawals |
 
@@ -53,7 +53,7 @@ Author lists retain contributors from the original `alpen` release-branch CLI
 history, including its earlier `strata-cli` paths, with Jose Storopoli listed first.
 
 Run `just test` and `just lints` to check the entire workspace. Release builds
-continue to use `cargo build --release --locked --bin alpen` without `test-mode`.
+use `cargo build --release --locked --bin alpen`.
 
 ## Configuration
 
@@ -71,6 +71,14 @@ List the available commands with:
 ```sh
 alpen --help
 ```
+
+## Seed storage
+
+Wallet seeds are encrypted with your wallet password and stored in the OS credential store:
+Secret Service on Linux (for example, GNOME Keyring or KWallet), Keychain on
+macOS, and Credential Manager on Windows. Linux requires a running, accessible
+Secret Service on the user's session D-Bus. If secure storage is unavailable,
+the command fails; it never falls back to a seed file.
 
 ## Security
 
