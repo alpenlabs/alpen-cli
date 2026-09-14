@@ -66,6 +66,8 @@ bdk_esplora = { version = "0.22.2", default-features = false, features = [
 ] }
 bdk_wallet = "3.1.0"
 bip39 = { version = "2.0.0", features = ["all-languages"] }
+# Randomize secp256k1 contexts without relying on BDK's feature selection.
+bitcoin = { version = "0.32.102", features = ["rand-std"] }
 chrono = "0.4.44"
 colored = "3.1.1"
 config = { version = "0.15.24", default-features = false, features = ["toml"] }
@@ -76,7 +78,6 @@ keyring = { version = "3.3.0", default-features = false }
 make_buf = { git = "https://github.com/alpenlabs/make_buf", version = "1.0.2" }
 rand_core = { version = "0.6.0", default-features = false }
 rusqlite = "0.31.0"
-secp256k1 = "0.29.1"
 serde = { version = "1.0.0", features = ["derive"] }
 sha2 = "0.10.8"
 shrex = { version = "1.0.0", features = ["serde"] }
