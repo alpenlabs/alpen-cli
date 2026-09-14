@@ -4,15 +4,10 @@ use alpen_wallet_keys::{
     password::{IncorrectPassword, Password},
 };
 pub use alpen_wallet_keystore::EncryptedSeedPersister;
-#[cfg(target_os = "linux")]
-pub use alpen_wallet_keystore::FilePersister;
-#[cfg(not(target_os = "linux"))]
 pub use alpen_wallet_keystore::{KeychainPersister, NoStorageAccess, PlatformFailure};
 use bip39::Mnemonic;
 use dialoguer::{Confirm, Input, Password as InputPassword};
 use rand_core::OsRng;
-#[cfg(target_os = "linux")]
-use std::io;
 use std::str::FromStr;
 use terrors::OneOf;
 use zeroize::Zeroizing;
@@ -114,15 +109,6 @@ pub fn load_or_create(
     }
 }
 
-#[cfg(target_os = "linux")]
-type LoadOrCreateErr = (
-    io::Error,
-    dialoguer::Error,
-    argon2::Error,
-    IncorrectPassword,
-);
-
-#[cfg(not(target_os = "linux"))]
 type LoadOrCreateErr = (
     PlatformFailure,
     NoStorageAccess,

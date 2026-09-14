@@ -1,14 +1,9 @@
-//! Encrypted seed persistence backends.
+//! Encrypted seed persistence in OS credential stores.
 
 use alpen_wallet_keys::EncryptedSeed;
-#[cfg(target_os = "linux")]
-use std::io;
 use terrors::OneOf;
 
-#[cfg(not(target_os = "linux"))]
 pub type PersisterErr = OneOf<(PlatformFailure, NoStorageAccess)>;
-#[cfg(target_os = "linux")]
-pub type PersisterErr = OneOf<(io::Error,)>;
 
 pub trait EncryptedSeedPersister {
     fn save(&self, seed: &EncryptedSeed) -> Result<(), PersisterErr>;
@@ -16,16 +11,8 @@ pub trait EncryptedSeedPersister {
     fn delete(&self) -> Result<(), PersisterErr>;
 }
 
-#[cfg(target_os = "linux")]
-pub use file::*;
-
-#[cfg(target_os = "linux")]
-mod file;
-
-#[cfg(not(target_os = "linux"))]
 mod keychain;
 
-#[cfg(not(target_os = "linux"))]
 pub use keychain::*;
 
 #[cfg(test)]
@@ -35,6 +22,7 @@ mod tests {
     use bip39::Language;
     use rand_core::OsRng;
     use std::cell::RefCell;
+    use tokio as _; // Used by the Secret Service integration test.
 
     #[derive(Default)]
     struct MemoryPersister(RefCell<Option<[u8; EncryptedSeed::LEN]>>);

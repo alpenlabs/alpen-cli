@@ -150,7 +150,6 @@ pub struct Invalid {
 #[expect(unused, reason = "Error type for ambiguous credential matches")]
 pub struct Ambiguous(Vec<Box<Credential>>);
 
-#[cfg(not(target_os = "linux"))]
 type KeyRingErrors = (
     PlatformFailure,
     NoStorageAccess,
