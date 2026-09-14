@@ -6,6 +6,7 @@ use change_pwd::ChangePwdArgs;
 use config::ConfigArgs;
 use deposit::DepositArgs;
 use drain::DrainArgs;
+use network::NetworkArgs;
 use receive::ReceiveArgs;
 use recover::RecoverArgs;
 #[cfg(not(feature = "test-mode"))]
@@ -23,6 +24,7 @@ pub mod config;
 pub mod debug;
 pub mod deposit;
 pub mod drain;
+pub mod network;
 pub mod receive;
 pub mod recover;
 pub mod reset;
@@ -54,6 +56,7 @@ pub enum Commands {
     Reset(ResetArgs),
     Scan(ScanArgs),
     Config(ConfigArgs),
+    Network(NetworkArgs),
     Debug(DebugArgs),
 }
 

@@ -198,7 +198,8 @@ pub struct BitcoinWallet {
 }
 
 impl BitcoinWallet {
-    fn db_path(wallet: &str, data_dir: &Path, network: Network) -> PathBuf {
+    /// Returns the SQLite database path for a named wallet and Bitcoin network.
+    pub fn db_path(wallet: &str, data_dir: &Path, network: Network) -> PathBuf {
         let wallet = match network {
             Network::Bitcoin => format!("{wallet}-bitcoin"),
             _ => wallet.to_string(),

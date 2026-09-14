@@ -2,7 +2,9 @@ use crate::progress::terminal_progress;
 use alpen_bitcoin_wallet::recover::RecoveryConfig;
 use std::{
     env::var,
-    fs::{File, create_dir_all},
+    error::Error,
+    fmt,
+    fs::{File, create_dir_all, rename},
     io,
     path::{Path, PathBuf},
     str::FromStr,
@@ -23,7 +25,7 @@ use terrors::OneOf;
 
 use crate::{
     bitcoin::{
-        EsploraClient,
+        BitcoinWallet, EsploraClient,
         backend::{BitcoinBackend, BitcoinCoreClient},
     },
     constants::*,
@@ -37,6 +39,99 @@ const PROJ_DIRS_ENV: &str = "PROJ_DIRS";
 const CONFIG_FILE_ENV: &str = "CLI_CONFIG";
 /// Default file name for the CLI config within the config directory.
 const DEFAULT_CONFIG_FILENAME: &str = "config.toml";
+
+/// A complete Alpen deployment, including its Bitcoin anchor network.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DeploymentProfile {
+    Mainnet,
+    Testnet,
+}
+
+/// Currently selected profile, or the Bitcoin network from a legacy flat config.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActiveDeployment {
+    Profile(DeploymentProfile),
+    Legacy(Network),
+}
+
+impl fmt::Display for ActiveDeployment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Profile(profile) => profile.fmt(f),
+            Self::Legacy(network) => write!(f, "legacy ({network})"),
+        }
+    }
+}
+
+impl DeploymentProfile {
+    pub fn expected_bitcoin_network(self) -> Network {
+        match self {
+            Self::Mainnet => Network::Bitcoin,
+            Self::Testnet => Network::Signet,
+        }
+    }
+
+    fn data_dir_name(self) -> &'static str {
+        match self {
+            Self::Mainnet => "mainnet",
+            Self::Testnet => "testnet",
+        }
+    }
+}
+
+impl fmt::Display for DeploymentProfile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.data_dir_name())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InvalidDeploymentProfile;
+
+impl fmt::Display for InvalidDeploymentProfile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("expected 'mainnet' or 'testnet'")
+    }
+}
+
+impl Error for InvalidDeploymentProfile {}
+
+impl FromStr for DeploymentProfile {
+    type Err = InvalidDeploymentProfile;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "mainnet" => Ok(Self::Mainnet),
+            "testnet" => Ok(Self::Testnet),
+            _ => Err(InvalidDeploymentProfile),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ProfileFiles {
+    mainnet: PathBuf,
+    testnet: PathBuf,
+}
+
+impl ProfileFiles {
+    fn get(&self, profile: DeploymentProfile) -> &Path {
+        match profile {
+            DeploymentProfile::Mainnet => &self.mainnet,
+            DeploymentProfile::Testnet => &self.testnet,
+        }
+    }
+}
+
+/// Optional dispatcher schema. A missing `active_profile` identifies a legacy flat config.
+#[derive(Clone, Debug, Deserialize)]
+struct ProfileSelector {
+    active_profile: Option<DeploymentProfile>,
+    profiles: Option<ProfileFiles>,
+    /// Explicit destination for one-time migration of legacy flat-layout state.
+    migrate_legacy_state: Option<DeploymentProfile>,
+}
 
 /// Settings deserialized from the config file.
 #[derive(Debug, Serialize, Deserialize)]
@@ -105,6 +200,8 @@ pub struct SettingsFromFile {
 pub struct Settings {
     pub esplora: Option<String>,
     pub alpen_endpoint: String,
+    /// Root containing shared and per-profile wallet state.
+    pub data_root: PathBuf,
     pub data_dir: PathBuf,
     pub bridge_musig2_pubkey: XOnlyPublicKey,
     pub descriptor_db: PathBuf,
@@ -113,6 +210,8 @@ pub struct Settings {
     pub bridge_alpen_address: AlpenAddress,
     pub linux_seed_file: PathBuf,
     pub config_file: PathBuf,
+    /// Selected deployment profile.
+    pub profile: Option<DeploymentProfile>,
     pub bitcoin_backend: Arc<dyn BitcoinBackend>,
     pub bridge_fee: Amount,
     pub finality_depth: u32,
@@ -165,12 +264,43 @@ impl Settings {
 
         // create config file if not exists
         let _ = File::create_new(config_file);
-        let from_file: SettingsFromFile = Config::builder()
+        let root_config = Config::builder()
             .add_source(config::File::from(config_file))
             .build()
-            .map_err(OneOf::new)?
-            .try_deserialize::<SettingsFromFile>()
             .map_err(OneOf::new)?;
+
+        let selector = root_config
+            .clone()
+            .try_deserialize::<ProfileSelector>()
+            .map_err(OneOf::new)?;
+        let profile_layout = selector.active_profile.is_some();
+        let (from_file, profile, profile_data_dir) = if let Some(profile) = selector.active_profile
+        {
+            let profiles = selector.profiles.ok_or_else(|| {
+                OneOf::new(ConfigError::Message(
+                    "active_profile requires a [profiles] table".to_owned(),
+                ))
+            })?;
+            let profile_file = resolve_profile_path(config_file, profiles.get(profile));
+            let from_file = Config::builder()
+                .add_source(config::File::from(profile_file.as_path()))
+                .build()
+                .map_err(OneOf::new)?
+                .try_deserialize::<SettingsFromFile>()
+                .map_err(OneOf::new)?;
+            validate_profile_network(profile, from_file.network).map_err(OneOf::new)?;
+            (
+                from_file,
+                Some(profile),
+                proj_dirs.data_dir().join(profile.data_dir_name()),
+            )
+        } else {
+            let from_file = root_config
+                .try_deserialize::<SettingsFromFile>()
+                .map_err(OneOf::new)?;
+            (from_file, None, proj_dirs.data_dir().to_owned())
+        };
+        create_dir_all(&profile_data_dir).map_err(OneOf::new)?;
 
         let sync_backend: Arc<dyn BitcoinBackend> = match (
             from_file.esplora.clone(),
@@ -210,28 +340,62 @@ impl Settings {
                 "invalid withdrawal params in config: {e}"
             )))
         })?;
-        let descriptor_file = proj_dirs.data_dir().join(match from_file.network {
-            Network::Bitcoin => "descriptors-bitcoin",
-            _ => "descriptors",
-        });
+        let bridge_alpen_address = AlpenAddress::from_str(
+            from_file
+                .bridge_alpen_address
+                .as_deref()
+                .unwrap_or(DEFAULT_BRIDGE_ALPEN_ADDRESS),
+        )
+        .map_err(|error| {
+            OneOf::new(ConfigError::Message(format!(
+                "invalid bridge Alpen address in config: {error}"
+            )))
+        })?;
+
+        if let Some(profile) = profile {
+            let legacy_state_exists = legacy_profile_state_exists(
+                proj_dirs.data_dir(),
+                &profile_data_dir,
+                profile,
+                from_file.network,
+            );
+            if selector.migrate_legacy_state == Some(profile) {
+                migrate_legacy_profile_state(
+                    proj_dirs.data_dir(),
+                    &profile_data_dir,
+                    profile,
+                    from_file.network,
+                )
+                .map_err(OneOf::new)?;
+            } else if legacy_state_exists {
+                return Err(OneOf::new(ConfigError::Message(format!(
+                    "legacy wallet state exists; set migrate_legacy_state = \"{profile}\" in config.toml to explicitly migrate it"
+                ))));
+            }
+        }
+
+        let descriptor_file = if profile_layout {
+            profile_data_dir.join("descriptors")
+        } else {
+            profile_data_dir.join(match from_file.network {
+                Network::Bitcoin => "descriptors-bitcoin",
+                _ => "descriptors",
+            })
+        };
 
         Ok(Settings {
             esplora: from_file.esplora,
             alpen_endpoint: from_file.alpen_endpoint,
-            data_dir: proj_dirs.data_dir().to_owned(),
+            data_root: proj_dirs.data_dir().to_owned(),
+            data_dir: profile_data_dir,
             bridge_musig2_pubkey: from_file.bridge_pubkey,
             descriptor_db: descriptor_file,
             mempool_space_endpoint: from_file.mempool_endpoint,
             blockscout_endpoint: from_file.blockscout_endpoint,
-            bridge_alpen_address: AlpenAddress::from_str(
-                from_file
-                    .bridge_alpen_address
-                    .as_deref()
-                    .unwrap_or(DEFAULT_BRIDGE_ALPEN_ADDRESS),
-            )
-            .expect("valid Alpen address"),
+            bridge_alpen_address,
             linux_seed_file,
             config_file: config_file.to_owned(),
+            profile,
             bitcoin_backend: sync_backend,
             bridge_fee: from_file
                 .bridge_fee_sats
@@ -246,6 +410,159 @@ impl Settings {
             seed: Seed::from_entropy(*from_file.seed),
         })
     }
+}
+
+/// Reads the active deployment without constructing network clients or opening wallet state.
+pub fn active_deployment_profile(config_file: &Path) -> Result<ActiveDeployment, ConfigError> {
+    let config = Config::builder()
+        .add_source(config::File::from(config_file))
+        .build()?;
+    let selector = config.clone().try_deserialize::<ProfileSelector>()?;
+    if let Some(profile) = selector.active_profile {
+        if selector.profiles.is_none() {
+            return Err(ConfigError::Message(
+                "active_profile requires a [profiles] table".to_owned(),
+            ));
+        }
+        return Ok(ActiveDeployment::Profile(profile));
+    }
+
+    #[derive(Deserialize)]
+    struct LegacyNetwork {
+        network: Network,
+    }
+
+    Ok(ActiveDeployment::Legacy(
+        config.try_deserialize::<LegacyNetwork>()?.network,
+    ))
+}
+
+/// Validates that a dispatcher references a readable profile with the expected Bitcoin network.
+pub fn validate_deployment_profile(
+    config_file: &Path,
+    profile: DeploymentProfile,
+) -> Result<(), ConfigError> {
+    let config = Config::builder()
+        .add_source(config::File::from(config_file))
+        .build()?;
+    let selector = config.try_deserialize::<ProfileSelector>()?;
+    let profiles = selector.profiles.ok_or_else(|| {
+        ConfigError::Message("config.toml must contain a [profiles] table".to_owned())
+    })?;
+    let profile_file = resolve_profile_path(config_file, profiles.get(profile));
+
+    let profile_settings = Config::builder()
+        .add_source(config::File::from(profile_file))
+        .build()?
+        .try_deserialize::<SettingsFromFile>()?;
+    validate_profile_network(profile, profile_settings.network)?;
+    BridgeParams::new_with_descriptor_limit(
+        profile_settings.bridge_denomination_sats,
+        profile_settings.max_withdrawal_amount_sats,
+        profile_settings.max_withdrawal_descriptor_len,
+    )
+    .map_err(|error| {
+        ConfigError::Message(format!("invalid withdrawal params in config: {error}"))
+    })?;
+    AlpenAddress::from_str(
+        profile_settings
+            .bridge_alpen_address
+            .as_deref()
+            .unwrap_or(DEFAULT_BRIDGE_ALPEN_ADDRESS),
+    )
+    .map_err(|error| {
+        ConfigError::Message(format!("invalid bridge Alpen address in config: {error}"))
+    })?;
+    Ok(())
+}
+
+fn resolve_profile_path(config_file: &Path, profile_file: &Path) -> PathBuf {
+    if profile_file.is_absolute() {
+        profile_file.to_owned()
+    } else {
+        config_file
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(profile_file)
+    }
+}
+
+fn validate_profile_network(
+    profile: DeploymentProfile,
+    network: Network,
+) -> Result<(), ConfigError> {
+    let expected = profile.expected_bitcoin_network();
+    if network != expected {
+        return Err(ConfigError::Message(format!(
+            "profile '{profile}' requires Bitcoin network '{expected}', but its config uses '{network}'"
+        )));
+    }
+    Ok(())
+}
+
+fn migrate_legacy_profile_state(
+    root_data_dir: &Path,
+    profile_data_dir: &Path,
+    profile: DeploymentProfile,
+    network: Network,
+) -> io::Result<()> {
+    let paths = legacy_profile_state_paths(root_data_dir, profile_data_dir, profile, network);
+    for (source, destination) in &paths {
+        if source.exists() && destination.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!(
+                    "cannot migrate legacy state: both '{}' and '{}' exist",
+                    source.display(),
+                    destination.display()
+                ),
+            ));
+        }
+    }
+    for (source, destination) in paths {
+        migrate_path_if_needed(&source, &destination)?;
+    }
+    Ok(())
+}
+
+fn legacy_profile_state_exists(
+    root_data_dir: &Path,
+    profile_data_dir: &Path,
+    profile: DeploymentProfile,
+    network: Network,
+) -> bool {
+    legacy_profile_state_paths(root_data_dir, profile_data_dir, profile, network)
+        .iter()
+        .any(|(source, _)| source.exists())
+}
+
+fn legacy_profile_state_paths(
+    root_data_dir: &Path,
+    profile_data_dir: &Path,
+    profile: DeploymentProfile,
+    network: Network,
+) -> [(PathBuf, PathBuf); 2] {
+    let legacy_descriptors = match profile {
+        DeploymentProfile::Mainnet => "descriptors-bitcoin",
+        DeploymentProfile::Testnet => "descriptors",
+    };
+    [
+        (
+            BitcoinWallet::db_path("default", root_data_dir, network),
+            BitcoinWallet::db_path("default", profile_data_dir, network),
+        ),
+        (
+            root_data_dir.join(legacy_descriptors),
+            profile_data_dir.join("descriptors"),
+        ),
+    ]
+}
+
+fn migrate_path_if_needed(source: &Path, destination: &Path) -> io::Result<()> {
+    if source.exists() {
+        rename(source, destination)?;
+    }
+    Ok(())
 }
 
 const X_ONLY_PUBLIC_KEY_HEX_LENGTH: usize = 64;
@@ -282,10 +599,189 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::{create_dir, write};
+
     use serde::de::value::{Error as ValueError, StringDeserializer};
+    use tempfile::tempdir;
     use toml;
 
     use super::*;
+
+    fn profile_config(network: &str, alpen_endpoint: &str) -> String {
+        format!(
+            r#"
+                esplora = "https://esplora.example.com"
+                alpen_endpoint = "{alpen_endpoint}"
+                bridge_pubkey = "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7"
+                network = "{network}"
+                magic_bytes = "ALPN"
+                bridge_denomination_sats = 100000000
+                recovery_delay = 36
+                max_withdrawal_descriptor_len = 81
+                seed = "000102030405060708090a0b0c0d0e0f"
+            "#
+        )
+    }
+
+    #[test]
+    fn loads_selected_profile_and_isolates_its_state() {
+        let root = tempdir().unwrap();
+        let config_file = root.path().join("config.toml");
+        write(
+            &config_file,
+            r#"
+                active_profile = "testnet"
+                migrate_legacy_state = "testnet"
+
+                [profiles]
+                mainnet = "mainnet.toml"
+                testnet = "testnet.toml"
+            "#,
+        )
+        .unwrap();
+        write(
+            root.path().join("mainnet.toml"),
+            profile_config("bitcoin", "https://rpc.mainnet.example.com"),
+        )
+        .unwrap();
+        write(
+            root.path().join("testnet.toml"),
+            profile_config("signet", "https://rpc.testnet.example.com"),
+        )
+        .unwrap();
+        write(root.path().join("default.sqlite"), b"legacy wallet").unwrap();
+        create_dir(root.path().join("descriptors")).unwrap();
+        write(
+            root.path().join("descriptors").join("legacy"),
+            b"legacy descriptors",
+        )
+        .unwrap();
+
+        let settings = Settings::load_from_paths(root.path().to_owned(), &config_file).unwrap();
+
+        assert_eq!(settings.profile, Some(DeploymentProfile::Testnet));
+        assert_eq!(settings.network, Network::Signet);
+        assert_eq!(settings.alpen_endpoint, "https://rpc.testnet.example.com");
+        assert_eq!(settings.data_root, root.path());
+        assert_eq!(settings.data_dir, root.path().join("testnet"));
+        assert_eq!(
+            settings.descriptor_db,
+            root.path().join("testnet").join("descriptors")
+        );
+        assert_eq!(settings.linux_seed_file, root.path().join("seed"));
+        assert!(root.path().join("testnet").join("default.sqlite").is_file());
+        assert!(
+            root.path()
+                .join("testnet")
+                .join("descriptors")
+                .join("legacy")
+                .is_file()
+        );
+        assert!(!root.path().join("default.sqlite").exists());
+        assert!(!root.path().join("descriptors").exists());
+    }
+
+    #[test]
+    fn requires_explicit_legacy_state_migration() {
+        let root = tempdir().unwrap();
+        let config_file = root.path().join("config.toml");
+        write(
+            &config_file,
+            r#"
+                active_profile = "testnet"
+
+                [profiles]
+                mainnet = "mainnet.toml"
+                testnet = "testnet.toml"
+            "#,
+        )
+        .unwrap();
+        write(
+            root.path().join("testnet.toml"),
+            profile_config("signet", "https://rpc.testnet.example.com"),
+        )
+        .unwrap();
+        write(root.path().join("default.sqlite"), b"legacy wallet").unwrap();
+
+        let error = Settings::load_from_paths(root.path().to_owned(), &config_file).unwrap_err();
+
+        assert!(format!("{error:?}").contains("migrate_legacy_state = \"testnet\""));
+        assert!(root.path().join("default.sqlite").is_file());
+        assert!(!root.path().join("testnet").join("default.sqlite").exists());
+    }
+
+    #[test]
+    fn rejects_bitcoin_network_that_does_not_match_profile() {
+        let root = tempdir().unwrap();
+        let config_file = root.path().join("config.toml");
+        write(
+            &config_file,
+            r#"
+                active_profile = "testnet"
+
+                [profiles]
+                mainnet = "mainnet.toml"
+                testnet = "testnet.toml"
+            "#,
+        )
+        .unwrap();
+        let mainnet = profile_config("bitcoin", "https://rpc.example.com");
+        write(root.path().join("mainnet.toml"), &mainnet).unwrap();
+        write(root.path().join("testnet.toml"), mainnet).unwrap();
+
+        let error = Settings::load_from_paths(root.path().to_owned(), &config_file).unwrap_err();
+
+        assert!(
+            format!("{error:?}").contains("profile 'testnet' requires Bitcoin network 'signet'")
+        );
+    }
+
+    #[test]
+    fn reads_active_profile_from_legacy_and_dispatcher_configs() {
+        let root = tempdir().unwrap();
+        let config_file = root.path().join("config.toml");
+        write(&config_file, "network = \"signet\"\n").unwrap();
+        assert_eq!(
+            active_deployment_profile(&config_file).unwrap(),
+            ActiveDeployment::Legacy(Network::Signet)
+        );
+
+        write(
+            &config_file,
+            "active_profile = \"mainnet\"\n[profiles]\nmainnet = \"mainnet.toml\"\ntestnet = \"testnet.toml\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            active_deployment_profile(&config_file).unwrap(),
+            ActiveDeployment::Profile(DeploymentProfile::Mainnet)
+        );
+    }
+
+    #[test]
+    fn legacy_flat_configs_keep_all_previously_supported_bitcoin_networks() {
+        for (name, expected) in [
+            ("regtest", Network::Regtest),
+            ("testnet", Network::Testnet),
+            ("testnet4", Network::Testnet4),
+        ] {
+            let root = tempdir().unwrap();
+            let config_file = root.path().join("config.toml");
+            write(
+                &config_file,
+                profile_config(name, "https://rpc.example.com"),
+            )
+            .unwrap();
+
+            let settings = Settings::load_from_paths(root.path().to_owned(), &config_file).unwrap();
+
+            assert_eq!(settings.profile, None);
+            assert_eq!(settings.network, expected);
+            assert_eq!(
+                active_deployment_profile(&config_file).unwrap(),
+                ActiveDeployment::Legacy(expected)
+            );
+        }
+    }
 
     #[test]
     fn test_parses_datatool_network_profile_snippet() {
