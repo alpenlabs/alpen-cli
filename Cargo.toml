@@ -57,7 +57,7 @@ strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v
 aes-gcm-siv = "0.11.1"
 alloy = "2.4.1"
 argh = "0.1.0"
-argon2 = "0.5.3"
+argon2 = "0.6.0"
 async-trait = "0.1.80"
 bdk_bitcoind_rpc = "0.22.0"
 bdk_esplora = { version = "0.22.2", default-features = false, features = [
