@@ -14,6 +14,7 @@ use bdk_wallet::{
 };
 use strata_asm_proto_bridge_txs::deposit_request::DrtHeaderAux;
 use strata_cli_common::errors::DisplayedError;
+use strata_codec::VarVec;
 use strata_identifiers::{AccountSerial, SYSTEM_RESERVED_ACCTS, SubjectIdBytes};
 use strata_l1_txfmt::{MagicBytes, ParseConfig};
 use strata_ol_bridge_types::DepositDescriptor;
@@ -95,11 +96,11 @@ pub fn prepare_deposit_request(
         SubjectIdBytes::try_new(alpen_address.to_vec()).expect("must be valid subject bytes");
     let deposit_descriptor = DepositDescriptor::new(ALPEN_EE_ACCT_SERIAL, alpen_subject_bytes)
         .expect("EE serial is within valid range");
-    let header_aux = DrtHeaderAux::new(
-        recovery_public_key.serialize(),
-        deposit_descriptor.encode_to_varvec(),
-    )
-    .expect("header aux creation should succeed");
+    // Cross the Alpen/ASM codec-version boundary using the descriptor's wire bytes.
+    let destination = VarVec::from_vec(deposit_descriptor.encode_to_vec())
+        .expect("deposit descriptor fits within the VarVec bound");
+    let header_aux = DrtHeaderAux::new(recovery_public_key.serialize(), destination)
+        .expect("header aux creation should succeed");
     let deposit_output = TxOut {
         value: bridge_in_amount,
         script_pubkey: bridge_in_address.script_pubkey(),
@@ -151,7 +152,7 @@ pub fn compute_recover_at_height(
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr, sync::Arc};
+    use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
     use bdk_wallet::{
         bitcoin::{Amount, FeeRate, Network, bip32::Xpriv, secp256k1::SECP256K1},
@@ -159,7 +160,9 @@ mod tests {
         miniscript::{Descriptor, Miniscript, descriptor::TapTree},
     };
     use rand_core::OsRng;
-    use strata_asm_proto_bridge_txs::deposit_request::parse_drt;
+    use strata_asm_proto_bridge_txs::deposit_request::{
+        create_deposit_request_locking_script, parse_drt,
+    };
     use strata_primitives::constants::RECOVER_DELAY;
     use strata_test_utils_btcio::BtcioTestHarness;
 
@@ -227,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn deposit_request_tx_parses_in_asm() {
+    fn deposit_request_tx_parses_in_asm_and_can_be_reclaimed() {
         let bridge_pubkey = XOnlyPublicKey::from_str(
             "89f96f834e39766f97e245d70b27236681f741ae51c117df19761af7cb2f657e",
         )
@@ -260,7 +263,7 @@ mod tests {
 
         let bridge_in_amount = Amount::from_sat(100_000);
         let (secret_key, public_key) = SECP256K1.generate_keypair(&mut OsRng);
-        let (_bridge_in_desc, bridge_in_address, header_aux, deposit_output) =
+        let (bridge_in_desc, bridge_in_address, header_aux, deposit_output) =
             prepare_deposit_request(
                 bridge_pubkey,
                 Network::Regtest,
@@ -281,8 +284,33 @@ mod tests {
             FeeRate::from_sat_per_vb(1).expect("valid fee rate"),
         )
         .expect("tx should be built");
+        // Pin the pre-upgrade wire format: OP_RETURN, 60-byte payload, ALPN,
+        // bridge protocol 2 / DRT type 0, recovery key, account 128, EVM address.
+        let mut expected_script = vec![0x6a, 60, b'A', b'L', b'P', b'N', 2, 0];
+        expected_script.extend_from_slice(&public_key.x_only_public_key().0.serialize());
+        expected_script.extend_from_slice(&[0, 128]);
+        expected_script.extend_from_slice(alpen_address.as_slice());
+        assert_eq!(tx.output[0].value, Amount::ZERO);
+        assert_eq!(tx.output[0].script_pubkey.as_bytes(), expected_script);
+        assert_eq!(tx.output[1], deposit_output);
+        assert_eq!(
+            deposit_output.script_pubkey,
+            create_deposit_request_locking_script(
+                header_aux.recovery_pk(),
+                bridge_pubkey,
+                RECOVER_DELAY,
+            )
+        );
         let parsed = parse_drt(&tx).expect("tx should parse as DRT");
         assert_eq!(parsed.header_aux(), &header_aux);
+        let destination =
+            DepositDescriptor::decode_from_slice(parsed.header_aux().destination().inner())
+                .expect("ASM destination should decode as an Alpen deposit descriptor");
+        assert_eq!(destination.dest_acct_serial(), &ALPEN_EE_ACCT_SERIAL);
+        assert_eq!(
+            destination.dest_subject().as_bytes(),
+            alpen_address.as_slice()
+        );
 
         let parsed_output = parsed.deposit_request_output().inner();
         assert_eq!(parsed_output.value, bridge_in_amount);
@@ -290,5 +318,60 @@ mod tests {
             parsed_output.script_pubkey,
             bridge_in_address.script_pubkey()
         );
+
+        // Confirm the deposit, then spend its actual output via the wallet's
+        // recovery descriptor after the configured CSV delay on regtest.
+        node.client
+            .send_raw_transaction(&tx)
+            .expect("signed deposit should be accepted by Bitcoin Core");
+        harness
+            .mine_blocks_blocking(usize::from(RECOVER_DELAY), None)
+            .expect("recovery delay should elapse");
+        let mut recovery_wallet = Wallet::create_single(bridge_in_desc)
+            .network(Network::Regtest)
+            .create_wallet_no_persist()
+            .expect("valid recovery wallet");
+        assert_eq!(
+            recovery_wallet
+                .reveal_next_address(KeychainKind::External)
+                .address,
+            bridge_in_address
+        );
+        sync_wallet_from_node(&mut recovery_wallet, &harness);
+        let policy = recovery_wallet
+            .policies(KeychainKind::External)
+            .expect("valid policy")
+            .expect("recovery policy");
+        let mut builder = recovery_wallet.build_tx();
+        builder.policy_path(
+            BTreeMap::from([(policy.id, vec![1])]),
+            KeychainKind::External,
+        );
+        builder.drain_wallet();
+        builder.drain_to(fund_address.script_pubkey());
+        builder.fee_rate(FeeRate::from_sat_per_vb(1).expect("valid fee rate"));
+        let mut psbt = builder.finish().expect("reclaim transaction should build");
+        assert!(
+            recovery_wallet
+                .sign(&mut psbt, Default::default())
+                .expect("reclaim transaction should sign")
+        );
+        let reclaim = psbt.extract_tx().expect("finalized reclaim transaction");
+        assert_eq!(reclaim.input.len(), 1);
+        assert_eq!(reclaim.input[0].previous_output.txid, tx.compute_txid());
+        assert_eq!(reclaim.input[0].previous_output.vout, 1);
+        assert_eq!(
+            reclaim.input[0].sequence.to_consensus_u32(),
+            u32::from(RECOVER_DELAY)
+        );
+        assert_eq!(reclaim.output.len(), 1);
+        assert_eq!(
+            reclaim.output[0].script_pubkey,
+            fund_address.script_pubkey()
+        );
+        assert!(reclaim.output[0].value > Amount::ZERO);
+        node.client
+            .send_raw_transaction(&reclaim)
+            .expect("timelocked reclaim should be accepted by Bitcoin Core");
     }
 }

@@ -43,6 +43,7 @@ sha2.workspace = true
 sled.workspace = true
 strata-asm-proto-bridge-txs.workspace = true
 strata-cli-common.workspace = true
+strata-codec.workspace = true
 strata-identifiers.workspace = true
 strata-l1-txfmt.workspace = true
 strata-ol-bridge-types.workspace = true

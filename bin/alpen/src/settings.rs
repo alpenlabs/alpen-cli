@@ -355,6 +355,7 @@ mod tests {
         // Serialize back to TOML string
         let serialized =
             toml::to_string(&parsed).expect("failed to serialize SettingsFromFile to TOML");
+        assert!(serialized.contains(r#"magic_bytes = "ALPN""#));
         assert!(serialized.contains(
             r#"bridge_pubkey = "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7""#
         ));
