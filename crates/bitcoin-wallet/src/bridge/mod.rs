@@ -1,11 +1,11 @@
 //! Bitcoin deposit-request construction for the Alpen bridge.
 use alloy::primitives::Address as AlpenAddress;
-use alpen_wallet_keys::DrtReclaimKeypair;
+use alpen_wallet_keys::{DrtReclaimKeypair, SECP256K1};
 use bdk_wallet::{
     KeychainKind, TxOrdering, Wallet,
     bitcoin::{
         Address as BitcoinAddress, Amount, FeeRate, Network, PrivateKey, Transaction, TxOut,
-        XOnlyPublicKey, secp256k1::SECP256K1,
+        XOnlyPublicKey,
     },
     coin_selection::InsufficientFunds,
     descriptor::IntoWalletDescriptor,
@@ -81,7 +81,7 @@ pub fn prepare_deposit_request(
     let bridge_in_address = {
         let desc = bridge_in_desc
             .clone()
-            .into_wallet_descriptor(SECP256K1, network.into())
+            .into_wallet_descriptor(&SECP256K1, network.into())
             .expect("valid descriptor");
         let mut temp_wallet = Wallet::create_single(desc)
             .network(network)
@@ -155,7 +155,7 @@ mod tests {
     use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
     use bdk_wallet::{
-        bitcoin::{Amount, FeeRate, Network, bip32::Xpriv, secp256k1::SECP256K1},
+        bitcoin::{Amount, FeeRate, Network, bip32::Xpriv},
         keys::{DescriptorPublicKey, SinglePub, SinglePubKey},
         miniscript::{Descriptor, Miniscript, descriptor::TapTree},
     };
