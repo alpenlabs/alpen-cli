@@ -15,8 +15,6 @@ use bdk_wallet::bitcoin::{Amount, Network, XOnlyPublicKey};
 use config::{Config, ConfigError};
 use directories::ProjectDirs;
 use serde::{Deserialize, Deserializer, Serialize, de};
-#[cfg(feature = "test-mode")]
-use shrex::Hex;
 use strata_bridge_params::BridgeParams;
 use strata_l1_txfmt::MagicBytes;
 use terrors::OneOf;
@@ -28,8 +26,6 @@ use crate::{
     },
     constants::*,
 };
-#[cfg(feature = "test-mode")]
-use crate::{constants::SEED_LEN, seed::Seed};
 
 /// Environment variable overriding the project directories root.
 const PROJ_DIRS_ENV: &str = "PROJ_DIRS";
@@ -94,9 +90,6 @@ pub struct SettingsFromFile {
     ///
     /// Must match the OL params.
     pub max_withdrawal_descriptor_len: u32,
-    /// Seed that can be passed directly for functional test.
-    #[cfg(feature = "test-mode")]
-    pub seed: Hex<[u8; SEED_LEN]>,
 }
 
 /// Settings struct filled with either config values or
@@ -111,7 +104,6 @@ pub struct Settings {
     pub mempool_space_endpoint: Option<String>,
     pub blockscout_endpoint: Option<String>,
     pub bridge_alpen_address: AlpenAddress,
-    pub linux_seed_file: PathBuf,
     pub config_file: PathBuf,
     pub bitcoin_backend: Arc<dyn BitcoinBackend>,
     pub bridge_fee: Amount,
@@ -123,8 +115,6 @@ pub struct Settings {
     pub magic_bytes: MagicBytes,
     /// Deposit-request reclaim delay in Bitcoin blocks.
     pub recovery_delay: u16,
-    #[cfg(feature = "test-mode")]
-    pub seed: Seed,
 }
 
 pub static PROJ_DIRS: LazyLock<ProjectDirs> = LazyLock::new(|| match var(PROJ_DIRS_ENV).ok() {
@@ -158,8 +148,6 @@ impl Settings {
         proj_dirs: &ProjectDirs,
         config_file: &Path,
     ) -> Result<Self, OneOf<(io::Error, config::ConfigError)>> {
-        let linux_seed_file = proj_dirs.data_dir().to_owned().join("seed");
-
         create_dir_all(proj_dirs.config_dir()).map_err(OneOf::new)?;
         create_dir_all(proj_dirs.data_dir()).map_err(OneOf::new)?;
 
@@ -230,7 +218,6 @@ impl Settings {
                     .unwrap_or(DEFAULT_BRIDGE_ALPEN_ADDRESS),
             )
             .expect("valid Alpen address"),
-            linux_seed_file,
             config_file: config_file.to_owned(),
             bitcoin_backend: sync_backend,
             bridge_fee: from_file
@@ -242,8 +229,6 @@ impl Settings {
             network: from_file.network,
             magic_bytes: from_file.magic_bytes,
             recovery_delay: from_file.recovery_delay,
-            #[cfg(feature = "test-mode")]
-            seed: Seed::from_entropy(*from_file.seed),
         })
     }
 }
@@ -306,8 +291,7 @@ mod tests {
         let config = format!(
             "{snippet}\n\
              alpen_endpoint = \"https://rpc.testnet.alpenlabs.io\"\n\
-             faucet_endpoint = \"https://faucet-api.testnet.alpenlabs.io\"\n\
-             seed = \"000102030405060708090a0b0c0d0e0f\"\n"
+             faucet_endpoint = \"https://faucet-api.testnet.alpenlabs.io\"\n"
         );
 
         // Deserialized through the `config` crate, not `toml`, because that is
@@ -345,7 +329,6 @@ mod tests {
             bridge_denomination_sats = 100_000_000
             recovery_delay = 1008
             max_withdrawal_descriptor_len = 81
-            seed = "000102030405060708090a0b0c0d0e0f"
         "#;
 
         // Deserialize from TOML string

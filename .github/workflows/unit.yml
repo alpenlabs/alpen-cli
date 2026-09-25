@@ -61,6 +61,28 @@ jobs:
         run: |
           cargo --locked nextest run --all-features --workspace
 
+      - name: Install Secret Service
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends gnome-keyring dbus-daemon libglib2.0-bin
+
+      - name: Test Secret Service
+        run: |
+          secret_service_test_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$secret_service_test_dir"' EXIT
+          export XDG_DATA_HOME="$secret_service_test_dir/data"
+          export XDG_RUNTIME_DIR="$secret_service_test_dir/runtime"
+          export XDG_CONFIG_HOME="$secret_service_test_dir/config"
+          mkdir -m 700 "$XDG_DATA_HOME" "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME"
+          unset GNOME_KEYRING_CONTROL
+          dbus-run-session -- bash -euo pipefail <<'SESSION'
+            gnome-keyring-daemon --foreground --components=secrets --unlock <<<"integration test password" &
+            keyring_pid=$!
+            trap 'kill "$keyring_pid" 2>/dev/null || true; wait "$keyring_pid" 2>/dev/null || true' EXIT
+            gdbus wait --session --timeout 30 org.freedesktop.secrets
+            ALPEN_SECRET_SERVICE_TEST=1 cargo --locked nextest run -p alpen-wallet-keystore --test secret_service --run-ignored only
+          SESSION
+
   doc:
     name: Run doc tests
     runs-on: ubuntu-latest

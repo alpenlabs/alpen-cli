@@ -37,9 +37,6 @@ terrors.workspace = true
 zeroize.workspace = true
 zxcvbn.workspace = true
 
-[features]
-test-mode = []
-
 # sha2 assembly is unavailable on Windows.
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 sha2 = { workspace = true, features = ["asm", "loongarch64_asm"] }
