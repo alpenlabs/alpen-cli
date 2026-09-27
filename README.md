@@ -81,6 +81,35 @@ Both values default to `50` and must be greater than `0`. A smaller
 `seed_recovery_gap_limit` stops recovery after fewer unused counters, which can
 miss later deposits, and makes Bitcoin Core replay the chain in smaller batches.
 
+To keep mainnet and testnet available without editing deployment settings, use
+`config.toml` as a profile selector:
+
+```toml
+active_profile = "testnet"
+
+[profiles]
+mainnet = "mainnet.toml"
+testnet = "testnet.toml"
+```
+
+The referenced files use the existing Alpen CLI configuration schema. A
+`mainnet` profile must use `network = "bitcoin"`; a `testnet` profile must use
+`network = "signet"`. Relative paths are resolved from the directory containing
+`config.toml`.
+
+Show or change the active deployment with:
+
+```sh
+alpen network show
+alpen network use mainnet
+alpen network use testnet
+```
+
+The encrypted seed remains shared. Wallet and recovery-descriptor data are
+stored separately under `mainnet/` and `testnet/`. Existing flat configuration
+files remain supported; switching profiles requires migration to the selector
+format above.
+
 List the available commands with:
 
 ```sh
