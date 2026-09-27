@@ -3,7 +3,7 @@ use crate::{
     BitcoinWallet,
     backend::BitcoinBackend,
     bridge::{bridge_in_descriptor, compute_recover_at_height},
-    constants::{RECOVERY_DESC_CLEANUP_DELAY, SEED_RECOVERY_GAP_LIMIT},
+    constants::RECOVERY_DESC_CLEANUP_DELAY,
     get_fee_rate,
     recovery::DescriptorRecovery,
     sync_wallet,
@@ -20,6 +20,7 @@ use bdk_wallet::{
 use chrono::Utc;
 use std::{
     collections::{BTreeMap, HashSet},
+    io,
     path::PathBuf,
     sync::Arc,
 };
@@ -35,6 +36,8 @@ pub struct RecoveryConfig {
     pub bridge_musig2_pubkey: XOnlyPublicKey,
     pub recovery_delay: u16,
     pub finality_depth: u32,
+    pub recovery_lookahead: u32,
+    pub seed_recovery_gap_limit: u32,
 }
 
 /// Recovery progress reported to the caller for presentation.
@@ -69,6 +72,7 @@ pub async fn recover(
     let mut l1w = BitcoinWallet::new(
         seed.bitcoin_wallet(settings.network),
         settings.network,
+        settings.recovery_lookahead,
         settings.bitcoin_backend.clone(),
     )
     .internal_error("Failed to load Bitcoin wallet")?;
@@ -255,16 +259,29 @@ async fn discover_seed_candidates(
     settings: &RecoveryConfig,
     known_used_scripts: &HashSet<ScriptBuf>,
 ) -> Result<Vec<SeedRecoveryCandidate>, DisplayedError> {
+    if settings.seed_recovery_gap_limit == 0 {
+        let error = io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "seed_recovery_gap_limit must be greater than 0",
+        );
+        return Err(DisplayedError::UserError(
+            error.to_string(),
+            Box::new(error),
+        ));
+    }
+
     let mut discovered = Vec::new();
-    let mut batch_start = 0u32;
-    let scan_checkpoint = seed_recovery_wallet(seed, settings, 0)?.latest_checkpoint();
+    // Counter 0 initializes an empty allocator; the first deposit is allocated counter 1.
+    let mut batch_start = 1u32;
+    let mut consecutive_unused = 0u32;
+    let scan_checkpoint = seed_recovery_wallet(seed, settings, 1)?.latest_checkpoint();
 
     loop {
         let batch_end = batch_start
-            .checked_add(SEED_RECOVERY_GAP_LIMIT)
+            .checked_add(settings.seed_recovery_gap_limit)
             .expect("reclaim-key scan range must fit in u32");
-        let mut candidates = Vec::with_capacity(SEED_RECOVERY_GAP_LIMIT as usize);
-        let mut scripts_to_scan = Vec::with_capacity(SEED_RECOVERY_GAP_LIMIT as usize);
+        let mut candidates = Vec::with_capacity(settings.seed_recovery_gap_limit as usize);
+        let mut scripts_to_scan = Vec::with_capacity(settings.seed_recovery_gap_limit as usize);
 
         for counter in batch_start..batch_end {
             let mut wallet = seed_recovery_wallet(seed, settings, counter)?;
@@ -290,23 +307,21 @@ async fn discover_seed_candidates(
                 .await
                 .internal_error("Failed to scan seed recovery scripts")?
         };
-        let mut discovered_in_batch = candidates
-            .into_iter()
-            .filter(|candidate| {
-                known_used_scripts.contains(&candidate.script_pubkey)
-                    || backend_used_scripts.contains(&candidate.script_pubkey)
-            })
-            .collect::<Vec<_>>();
-
-        if discovered_in_batch.is_empty() {
-            break;
+        for candidate in candidates {
+            if known_used_scripts.contains(&candidate.script_pubkey)
+                || backend_used_scripts.contains(&candidate.script_pubkey)
+            {
+                consecutive_unused = 0;
+                discovered.push(candidate);
+            } else {
+                consecutive_unused += 1;
+                if consecutive_unused == settings.seed_recovery_gap_limit {
+                    return Ok(discovered);
+                }
+            }
         }
-
-        discovered.append(&mut discovered_in_batch);
         batch_start = batch_end;
     }
-
-    Ok(discovered)
 }
 
 /// Reconstructs the allocator high-water mark without spending any recovered outputs.
@@ -395,7 +410,122 @@ async fn recover_from_seed(
 
 #[cfg(test)]
 mod tests {
+    use std::{path::PathBuf, str::FromStr};
+
     use super::*;
+    use crate::tests::TestBitcoinBackend;
+
+    fn test_recovery_settings(gap_limit: u32) -> RecoveryConfig {
+        RecoveryConfig {
+            network: Network::Signet,
+            bitcoin_backend: Arc::new(TestBitcoinBackend::default()),
+            descriptor_db: PathBuf::new(),
+            bridge_musig2_pubkey: XOnlyPublicKey::from_str(
+                "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7",
+            )
+            .unwrap(),
+            recovery_delay: 36,
+            finality_depth: 6,
+            recovery_lookahead: 50,
+            seed_recovery_gap_limit: gap_limit,
+        }
+    }
+
+    fn script_for_counter(seed: &Seed, settings: &RecoveryConfig, counter: u32) -> ScriptBuf {
+        seed_recovery_wallet(seed, settings, counter)
+            .unwrap()
+            .reveal_next_address(KeychainKind::External)
+            .address
+            .script_pubkey()
+    }
+
+    #[tokio::test]
+    async fn rejects_zero_gap_limit() {
+        let seed = Seed::from_entropy([0; 16]);
+        let settings = test_recovery_settings(0);
+
+        let error = discover_seed_candidates(&seed, &settings, &HashSet::new())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            DisplayedError::UserError(message, _)
+                if message == "seed_recovery_gap_limit must be greater than 0"
+        ));
+    }
+
+    #[tokio::test]
+    async fn gap_limit_one_discovers_first_allocated_counter() {
+        let seed = Seed::from_entropy([0; 16]);
+        let mut settings = test_recovery_settings(1);
+        let counter_one_script = script_for_counter(&seed, &settings, 1);
+        settings.bitcoin_backend = Arc::new(TestBitcoinBackend {
+            used_scripts: HashSet::from([counter_one_script]),
+            ..Default::default()
+        });
+
+        let candidates = discover_seed_candidates(&seed, &settings, &HashSet::new())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            candidates
+                .into_iter()
+                .map(|candidate| candidate.counter)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+    }
+
+    #[tokio::test]
+    async fn gap_limit_two_skips_one_unused_counter() {
+        let seed = Seed::from_entropy([0; 16]);
+        let mut settings = test_recovery_settings(2);
+        let counter_two_script = script_for_counter(&seed, &settings, 2);
+        settings.bitcoin_backend = Arc::new(TestBitcoinBackend {
+            used_scripts: HashSet::from([counter_two_script]),
+            ..Default::default()
+        });
+
+        let candidates = discover_seed_candidates(&seed, &settings, &HashSet::new())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            candidates
+                .into_iter()
+                .map(|candidate| candidate.counter)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_stops_at_consecutive_unused_limit_across_batches() {
+        let seed = Seed::from_entropy([0; 16]);
+        let mut settings = test_recovery_settings(2);
+        let used_scripts = [1, 4]
+            .into_iter()
+            .map(|counter| script_for_counter(&seed, &settings, counter))
+            .collect();
+        settings.bitcoin_backend = Arc::new(TestBitcoinBackend {
+            used_scripts,
+            ..Default::default()
+        });
+
+        let candidates = discover_seed_candidates(&seed, &settings, &HashSet::new())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            candidates
+                .into_iter()
+                .map(|candidate| candidate.counter)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+    }
 
     #[test]
     fn test_cleanup_delay_not_elapsed_keeps_descriptor() {
