@@ -122,6 +122,7 @@ pub trait BitcoinBackend: Debug + Send + Sync {
         req: FullScanRequestBuilder<KeychainKind>,
         last_cp: CheckPoint,
         send_update: UpdateSender,
+        stop_gap: usize,
     ) -> Result<(), ScanError>;
     async fn broadcast_tx(&self, tx: &Transaction) -> Result<(), BroadcastTxError>;
     async fn get_fee_rate(
@@ -130,11 +131,6 @@ pub trait BitcoinBackend: Debug + Send + Sync {
     ) -> Result<Option<FeeRate>, OneOf<(InvalidFee, GetFeeRateError)>>;
 }
 
-/// Number of consecutive unused addresses to check before a full scan gives up
-/// looking for more funds. This follows the BIP-44 gap-limit convention used
-/// by Bitcoin Core and most wallets; a lower value can make a scan miss real
-/// funds sitting past a short run of unused addresses.
-const STOP_GAP: usize = 20;
 const PARALLEL_REQUESTS: usize = 3;
 
 #[async_trait]
@@ -209,6 +205,7 @@ impl BitcoinBackend for EsploraClient {
         req: FullScanRequestBuilder<KeychainKind>,
         _last_cp: CheckPoint,
         send_update: UpdateSender,
+        stop_gap: usize,
     ) -> Result<(), ScanError> {
         self.1.report(BackendEvent::ScanStarted);
         let observer = self.1.clone();
@@ -228,7 +225,7 @@ impl BitcoinBackend for EsploraClient {
             .build();
 
         let update = self
-            .full_scan(req, STOP_GAP, PARALLEL_REQUESTS)
+            .full_scan(req, stop_gap, PARALLEL_REQUESTS)
             .await
             .map_err(|e| Box::new(e) as BoxedErr)?;
         self.1.report(BackendEvent::Persisting);
@@ -352,6 +349,7 @@ impl BitcoinBackend for BitcoinCoreClient {
         _req: FullScanRequestBuilder<KeychainKind>,
         last_cp: CheckPoint,
         send_update: UpdateSender,
+        _stop_gap: usize,
     ) -> Result<(), ScanError> {
         sync_wallet_with_core(
             self.client.clone(),

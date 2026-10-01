@@ -51,7 +51,15 @@ pub async fn get_fee_rate(
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::{collections::HashSet, io::ErrorKind, path::Path, sync::Arc};
+    use std::{
+        collections::HashSet,
+        io::ErrorKind,
+        path::Path,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
 
     use async_trait::async_trait;
     use bdk_wallet::{
@@ -69,13 +77,14 @@ pub(crate) mod tests {
     use super::{
         BitcoinBackend, BitcoinWallet, DEFAULT_LOOKAHEAD, SyncError,
         backend::{BroadcastTxError, GetFeeRateError, InvalidFee, ScanError, UpdateSender},
-        get_fee_rate, lookahead_for_scan_state,
+        get_fee_rate, lookahead_for_scan_state, scan_wallet,
     };
 
     #[derive(Debug, Default)]
     pub(crate) struct TestBitcoinBackend {
         pub(crate) fee_rate: Option<FeeRate>,
         pub(crate) used_scripts: HashSet<ScriptBuf>,
+        pub(crate) scan_stop_gap: AtomicUsize,
     }
 
     #[async_trait]
@@ -105,7 +114,9 @@ pub(crate) mod tests {
             _req: FullScanRequestBuilder<KeychainKind>,
             _last_cp: CheckPoint,
             _send_update: UpdateSender,
+            stop_gap: usize,
         ) -> Result<(), ScanError> {
+            self.scan_stop_gap.store(stop_gap, Ordering::Relaxed);
             Ok(())
         }
 
@@ -196,6 +207,24 @@ pub(crate) mod tests {
             "recovery_lookahead must be greater than 0"
         );
     }
+
+    #[tokio::test]
+    async fn passes_recovery_lookahead_to_full_scan_backend() {
+        let seed = Seed::from_entropy([0; 16]);
+        let (_, create) = seed.bitcoin_wallet(Network::Signet).split();
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        let mut wallet = create
+            .network(Network::Signet)
+            .create_wallet(&mut connection)
+            .unwrap();
+        let backend = Arc::new(TestBitcoinBackend::default());
+
+        scan_wallet(&mut wallet, backend.clone(), 500)
+            .await
+            .unwrap();
+
+        assert_eq!(backend.scan_stop_gap.load(Ordering::Relaxed), 500);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -235,6 +264,7 @@ impl EsploraClient {
 pub struct BitcoinWallet {
     wallet: PersistedWallet<Persister>,
     sync_backend: Arc<dyn BitcoinBackend>,
+    recovery_lookahead: u32,
 }
 
 impl BitcoinWallet {
@@ -279,6 +309,7 @@ impl BitcoinWallet {
                         .expect("wallet creation to succeed")
                 }),
             sync_backend,
+            recovery_lookahead,
         })
     }
 
@@ -291,9 +322,13 @@ impl BitcoinWallet {
     ) -> Result<(), OneOf<(UpdateError, SyncError, ScanError, rusqlite::Error)>> {
         let needs_full_scan = !Persister::full_scan_completed().map_err(OneOf::new)?;
         if needs_full_scan {
-            scan_wallet(&mut self.wallet, self.sync_backend.clone())
-                .await
-                .map_err(OneOf::broaden)?;
+            scan_wallet(
+                &mut self.wallet,
+                self.sync_backend.clone(),
+                self.recovery_lookahead,
+            )
+            .await
+            .map_err(OneOf::broaden)?;
         } else {
             sync_wallet(&mut self.wallet, self.sync_backend.clone())
                 .await
@@ -310,7 +345,12 @@ impl BitcoinWallet {
     }
 
     pub async fn scan(&mut self) -> Result<(), OneOf<(UpdateError, ScanError, rusqlite::Error)>> {
-        scan_wallet(&mut self.wallet, self.sync_backend.clone()).await?;
+        scan_wallet(
+            &mut self.wallet,
+            self.sync_backend.clone(),
+            self.recovery_lookahead,
+        )
+        .await?;
         self.persist().map_err(OneOf::new)?;
         Persister::mark_full_scan_completed().map_err(OneOf::new)?;
         Ok(())
@@ -351,12 +391,15 @@ fn lookahead_for_scan_state(
 pub async fn scan_wallet(
     wallet: &mut Wallet,
     sync_backend: Arc<dyn BitcoinBackend>,
+    stop_gap: u32,
 ) -> Result<(), OneOf<(UpdateError, ScanError, rusqlite::Error)>> {
     let req = wallet.start_full_scan();
     let last_cp = wallet.latest_checkpoint();
     let (tx, rx) = unbounded_channel();
 
-    let handle = tokio::spawn(async move { sync_backend.scan_wallet(req, last_cp, tx).await });
+    let stop_gap = usize::try_from(stop_gap).expect("u32 fits in usize");
+    let handle =
+        tokio::spawn(async move { sync_backend.scan_wallet(req, last_cp, tx, stop_gap).await });
 
     apply_update_stream(wallet, rx).await.map_err(OneOf::new)?;
 
