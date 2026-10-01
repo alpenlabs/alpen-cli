@@ -122,6 +122,7 @@ mod tests {
             _req: FullScanRequestBuilder<KeychainKind>,
             _last_cp: CheckPoint,
             _send_update: UpdateSender,
+            _stop_gap: usize,
         ) -> Result<(), ScanError> {
             Ok(())
         }
