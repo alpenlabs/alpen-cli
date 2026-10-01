@@ -5,6 +5,7 @@ use change_pwd::ChangePwdArgs;
 use config::ConfigArgs;
 use deposit::DepositArgs;
 use drain::DrainArgs;
+use faucet::FaucetArgs;
 use network::NetworkArgs;
 use receive::ReceiveArgs;
 use recover::RecoverArgs;
@@ -22,6 +23,7 @@ pub mod config;
 pub mod debug;
 pub mod deposit;
 pub mod drain;
+pub mod faucet;
 pub mod network;
 pub mod receive;
 pub mod recover;
@@ -49,6 +51,7 @@ pub enum Commands {
     Backup(BackupArgs),
     Deposit(DepositArgs),
     Withdraw(WithdrawArgs),
+    Faucet(FaucetArgs),
     Send(SendArgs),
     Receive(ReceiveArgs),
     ChangePwd(ChangePwdArgs),
@@ -152,6 +155,7 @@ mod tests {
             r#"
                 esplora = "https://esplora.example.com"
                 alpen_endpoint = "https://rpc.example.com"
+                faucet_endpoint = "https://faucet.example.com"
                 bridge_pubkey = "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7"
                 network = "bitcoin"
                 magic_bytes = "STRA"

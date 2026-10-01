@@ -143,6 +143,7 @@ mod tests {
             r#"
                 esplora = "https://esplora.example.com"
                 alpen_endpoint = "https://rpc.mainnet.example.com"
+                faucet_endpoint = "https://faucet.example.com"
                 bridge_pubkey = "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7"
                 network = "bitcoin"
                 magic_bytes = "ALPN"
