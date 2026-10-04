@@ -22,7 +22,7 @@ use std::{
 use backend::{BitcoinBackend, ScanError, SyncError, UpdateError, WalletUpdate};
 use bdk_esplora::esplora_client::{self, AsyncClient};
 use bdk_wallet::{
-    PersistedWallet, Wallet,
+    KeychainKind, PersistedWallet, Wallet,
     bitcoin::{FeeRate, Network},
     chain::keychain_txout::DEFAULT_LOOKAHEAD,
 };
@@ -69,7 +69,7 @@ pub(crate) mod tests {
     use super::{
         BitcoinBackend, BitcoinWallet, DEFAULT_LOOKAHEAD, SyncError,
         backend::{BroadcastTxError, GetFeeRateError, InvalidFee, ScanError, UpdateSender},
-        get_fee_rate, lookahead_for_scan_state,
+        get_fee_rate, lookahead_for_scan_state, reveal_recovery_range,
     };
 
     #[derive(Debug, Default)]
@@ -196,6 +196,37 @@ pub(crate) mod tests {
             "recovery_lookahead must be greater than 0"
         );
     }
+
+    #[test]
+    fn recovery_range_survives_wallet_reload() {
+        let seed = Seed::from_entropy([0; 16]);
+        let (load, create) = seed.bitcoin_wallet(Network::Signet).split();
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        let mut wallet = create
+            .network(Network::Signet)
+            .create_wallet(&mut connection)
+            .unwrap();
+
+        let recovery_lookahead = 50;
+        reveal_recovery_range(&mut wallet, recovery_lookahead);
+        wallet.persist(&mut connection).unwrap();
+        drop(wallet);
+
+        let wallet = load
+            .check_network(Network::Signet)
+            .load_wallet(&mut connection)
+            .unwrap()
+            .unwrap();
+        let last_recovery_index = recovery_lookahead - 1;
+        assert_eq!(
+            wallet.derivation_index(KeychainKind::External),
+            Some(last_recovery_index)
+        );
+        assert_eq!(
+            wallet.derivation_index(KeychainKind::Internal),
+            Some(last_recovery_index)
+        );
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -235,6 +266,7 @@ impl EsploraClient {
 pub struct BitcoinWallet {
     wallet: PersistedWallet<Persister>,
     sync_backend: Arc<dyn BitcoinBackend>,
+    recovery_lookahead: u32,
 }
 
 impl BitcoinWallet {
@@ -279,6 +311,7 @@ impl BitcoinWallet {
                         .expect("wallet creation to succeed")
                 }),
             sync_backend,
+            recovery_lookahead,
         })
     }
 
@@ -294,6 +327,7 @@ impl BitcoinWallet {
             scan_wallet(&mut self.wallet, self.sync_backend.clone())
                 .await
                 .map_err(OneOf::broaden)?;
+            reveal_recovery_range(&mut self.wallet, self.recovery_lookahead);
         } else {
             sync_wallet(&mut self.wallet, self.sync_backend.clone())
                 .await
@@ -310,7 +344,11 @@ impl BitcoinWallet {
     }
 
     pub async fn scan(&mut self) -> Result<(), OneOf<(UpdateError, ScanError, rusqlite::Error)>> {
+        let needs_recovery_range = !Persister::full_scan_completed().map_err(OneOf::new)?;
         scan_wallet(&mut self.wallet, self.sync_backend.clone()).await?;
+        if needs_recovery_range {
+            reveal_recovery_range(&mut self.wallet, self.recovery_lookahead);
+        }
         self.persist().map_err(OneOf::new)?;
         Persister::mark_full_scan_completed().map_err(OneOf::new)?;
         Ok(())
@@ -321,7 +359,8 @@ impl BitcoinWallet {
     }
 }
 
-/// Picks how many addresses to cache beyond the last known one.
+/// Number of addresses cached and retained during the scan that follows a
+/// restore from seed.
 ///
 /// The Bitcoin Core backend never uses the Esplora `stop_gap`. It replays
 /// each block once and only recognizes an address already held in this
@@ -330,7 +369,17 @@ impl BitcoinWallet {
 /// old addresses, because the emitter resumes from the agreed tip
 /// afterwards. The configured `recovery_lookahead` controls how many such
 /// addresses are cached.
-///
+/// Retains the recovery range across restarts so an address issued before a
+/// restore remains discoverable even if it receives its first payment later.
+fn reveal_recovery_range(wallet: &mut Wallet, recovery_lookahead: u32) {
+    let last_recovery_index = recovery_lookahead - 1;
+    for keychain in [KeychainKind::External, KeychainKind::Internal] {
+        wallet
+            .reveal_addresses_to(keychain, last_recovery_index)
+            .for_each(drop);
+    }
+}
+
 /// Only the scan that follows a restore uses the configured recovery cache;
 /// every later command uses the default. A database error is treated as an
 /// incomplete scan and therefore uses the configured recovery lookahead.
