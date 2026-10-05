@@ -5726,7 +5726,7 @@ dependencies = [
 [[package]]
 name = "strata-asm-bridge-types"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.5#dbdb00a9d43a32f2d1965f1c272997fcbb329843"
 dependencies = [
  "arbitrary",
  "bitcoin-bosd 0.12.0",
@@ -5745,7 +5745,7 @@ dependencies = [
 [[package]]
 name = "strata-asm-common"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.5#dbdb00a9d43a32f2d1965f1c272997fcbb329843"
 dependencies = [
  "bitcoin",
  "borsh",
@@ -5768,7 +5768,7 @@ dependencies = [
 [[package]]
 name = "strata-asm-manifest-types"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.5#dbdb00a9d43a32f2d1965f1c272997fcbb329843"
 dependencies = [
  "borsh",
  "serde",
@@ -5789,12 +5789,12 @@ dependencies = [
 [[package]]
 name = "strata-asm-proto-bridge-txs"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.5#dbdb00a9d43a32f2d1965f1c272997fcbb329843"
 dependencies = [
  "arbitrary",
  "bitcoin",
  "bitcoin-bosd 0.12.0",
- "strata-asm-bridge-types 0.1.0 (git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4)",
+ "strata-asm-bridge-types 0.1.0 (git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.5)",
  "strata-asm-common",
  "strata-btc-types 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
  "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
@@ -5806,7 +5806,7 @@ dependencies = [
 [[package]]
 name = "strata-asm-state"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.5#dbdb00a9d43a32f2d1965f1c272997fcbb329843"
 dependencies = [
  "serde",
  "ssz 0.17.0",
@@ -5903,12 +5903,13 @@ dependencies = [
 [[package]]
 name = "strata-btc-verification"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.5#dbdb00a9d43a32f2d1965f1c272997fcbb329843"
 dependencies = [
  "arbitrary",
  "bitcoin",
  "borsh",
  "serde",
+ "sha2",
  "ssz 0.17.0",
  "ssz_codegen 0.17.0",
  "ssz_derive 0.17.0",
