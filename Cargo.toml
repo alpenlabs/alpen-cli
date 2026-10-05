@@ -69,7 +69,7 @@ bdk_esplora = { version = "0.22.2", default-features = false, features = [
   "tokio",
 ] }
 bdk_wallet = "3.1.0"
-bip39 = { version = "2.0.0", features = ["all-languages"] }
+bip39 = { version = "3.0.0", features = ["all-languages"] }
 # Randomize secp256k1 contexts without relying on BDK's feature selection.
 bitcoin = { version = "0.32.102", features = ["rand-std"] }
 chrono = "0.4.44"
