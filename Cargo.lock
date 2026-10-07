@@ -758,7 +758,7 @@ dependencies = [
 
 [[package]]
 name = "alpen-bitcoin-wallet"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "aes-gcm-siv",
  "alloy",
@@ -787,7 +787,7 @@ dependencies = [
 
 [[package]]
 name = "alpen-cli"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "aes-gcm-siv",
  "alloy",
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "alpen-wallet"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "alloy",
  "alpen-reth-primitives",
@@ -847,7 +847,7 @@ dependencies = [
 
 [[package]]
 name = "alpen-wallet-keys"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "aes-gcm-siv",
  "alloy",
@@ -865,7 +865,7 @@ dependencies = [
 
 [[package]]
 name = "alpen-wallet-keystore"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "alpen-wallet-keys",
  "bip39",
