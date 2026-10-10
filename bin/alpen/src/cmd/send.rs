@@ -1,4 +1,4 @@
-use crate::fees::log_fee_rate;
+use crate::fees::{log_fee_rate, resolve_eip1559_fees};
 use alpen_bitcoin_wallet::transfer::build_transfer;
 use std::str::FromStr;
 
@@ -35,6 +35,14 @@ pub struct SendArgs {
     /// override Bitcoin fee rate in sat/vbyte; the effective rate is at least 1
     #[argh(option)]
     fee_rate: Option<u64>,
+
+    /// maximum Alpen EIP-1559 fee per gas, in gwei
+    #[argh(option)]
+    max_fee_per_gas: Option<u128>,
+
+    /// maximum Alpen EIP-1559 priority fee per gas, in gwei
+    #[argh(option)]
+    max_priority_fee_per_gas: Option<u128>,
 }
 
 pub async fn send(args: SendArgs, seed: Seed, settings: Settings) -> Result<(), DisplayedError> {
@@ -45,6 +53,12 @@ pub async fn send(args: SendArgs, seed: Seed, settings: Settings) -> Result<(), 
 
     match chain {
         Chain::Bitcoin => {
+            if args.max_fee_per_gas.is_some() || args.max_priority_fee_per_gas.is_some() {
+                return Err(DisplayedError::UserError(
+                    "EIP-1559 fee options apply only to Alpen transactions".to_owned(),
+                    Box::new(()),
+                ));
+            }
             let amount = Amount::from_sat(args.amount);
             let address = Address::from_str(&args.address)
                 .user_error(format!(
@@ -83,13 +97,20 @@ pub async fn send(args: SendArgs, seed: Seed, settings: Settings) -> Result<(), 
             );
         }
         Chain::Alpen => {
+            if args.fee_rate.is_some() {
+                return Err(DisplayedError::UserError(
+                    "--fee-rate applies only to Bitcoin transactions".to_owned(),
+                    Box::new(()),
+                ));
+            }
+            let fees = resolve_eip1559_fees(args.max_fee_per_gas, args.max_priority_fee_per_gas)?;
             let l2w = AlpenWallet::new(seed.get_alpen_wallet(), &settings.alpen_endpoint)
                 .user_error("Invalid Alpen endpoint URL. Check the configuration.")?;
             let address = AlpenAddress::from_str(&args.address).user_error(format!(
                 "Invalid Alpen address {}. Must be an EVM-compatible address",
                 args.address
             ))?;
-            let txid = l2w.send(address, args.amount).await?;
+            let txid = l2w.send(address, args.amount, fees).await?;
             println!(
                 "{}",
                 OnchainObject::from(&txid)
