@@ -1,4 +1,4 @@
-use crate::fees::{log_fee_rate, resolve_eip1559_fees};
+use crate::fees::{Gwei, log_fee_rate, resolve_eip1559_fees};
 use alpen_bitcoin_wallet::transfer::build_transfer;
 use std::str::FromStr;
 
@@ -36,13 +36,13 @@ pub struct SendArgs {
     #[argh(option)]
     fee_rate: Option<u64>,
 
-    /// maximum Alpen EIP-1559 fee per gas, in gwei
+    /// maximum Alpen EIP-1559 fee per gas, in decimal gwei
     #[argh(option)]
-    max_fee_per_gas: Option<u128>,
+    max_fee_per_gas: Option<Gwei>,
 
-    /// maximum Alpen EIP-1559 priority fee per gas, in gwei
+    /// maximum Alpen EIP-1559 priority fee per gas, in decimal gwei
     #[argh(option)]
-    max_priority_fee_per_gas: Option<u128>,
+    max_priority_fee_per_gas: Option<Gwei>,
 }
 
 pub async fn send(args: SendArgs, seed: Seed, settings: Settings) -> Result<(), DisplayedError> {
