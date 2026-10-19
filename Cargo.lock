@@ -775,11 +775,11 @@ dependencies = [
  "sled",
  "strata-asm-proto-bridge-txs",
  "strata-cli-common",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
+ "strata-codec",
+ "strata-identifiers",
  "strata-l1-txfmt",
  "strata-ol-bridge-types",
- "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257)",
+ "strata-primitives",
  "strata-test-utils-btcio",
  "terrors",
  "tokio",
@@ -812,7 +812,7 @@ dependencies = [
  "strata-bridge-params",
  "strata-cli-common",
  "strata-l1-txfmt",
- "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257)",
+ "strata-primitives",
  "tempfile",
  "terrors",
  "tokio",
@@ -824,12 +824,12 @@ dependencies = [
 [[package]]
 name = "alpen-reth-primitives"
 version = "0.3.0-alpha.1"
-source = "git+https://github.com/alpenlabs/alpen.git?rev=efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b#efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b"
+source = "git+https://github.com/alpenlabs/alpen-ee?tag=v0.4.0-rc.3#4ef60bdc88714723147122db83d603442f975659"
 dependencies = [
  "alloy-sol-types",
  "serde",
  "strata-ol-bridge-types",
- "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b)",
+ "strata-primitives",
 ]
 
 [[package]]
@@ -842,7 +842,7 @@ dependencies = [
  "strata-bridge-params",
  "strata-cli-common",
  "strata-ol-bridge-types",
- "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257)",
+ "strata-primitives",
 ]
 
 [[package]]
@@ -1466,6 +1466,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
+
+[[package]]
 name = "base64ct"
 version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1590,43 +1596,16 @@ dependencies = [
 
 [[package]]
 name = "bitcoin-bosd"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94fb19ad225b5555a3c99796fe9c5d14b18eb0130eee5c39875bb642f173be6f"
-dependencies = [
- "bitcoin",
- "hex-conservative 0.2.2",
- "secp256k1 0.29.1",
-]
-
-[[package]]
-name = "bitcoin-bosd"
-version = "0.11.0"
-source = "git+https://github.com/alpenlabs/bitcoin-bosd?tag=v0.11.0#2fc97b87088059762ead689cb67d8f118aa86160"
-dependencies = [
- "arbitrary",
- "bitcoin",
- "borsh",
- "hex-conservative 0.2.2",
- "secp256k1 0.29.1",
- "serde",
- "ssz 0.16.0",
- "ssz_types 0.16.0",
-]
-
-[[package]]
-name = "bitcoin-bosd"
 version = "0.12.0"
 source = "git+https://github.com/alpenlabs/bitcoin-bosd?tag=v0.12.0#499fd5d8940a9e40ae632d5a770a57a82a1f289f"
 dependencies = [
  "arbitrary",
  "bitcoin",
- "borsh",
  "hex-conservative 0.2.2",
  "secp256k1 0.29.1",
  "serde",
- "ssz 0.17.0",
- "ssz_types 0.17.0",
+ "ssz",
+ "ssz_types",
 ]
 
 [[package]]
@@ -1702,14 +1681,14 @@ dependencies = [
 
 [[package]]
 name = "bitcoind-async-client"
-version = "0.10.10"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8acbfa6508d9a844a8194f38e40b56fb72e5085d57a6990ddaa1e576747f9745"
+checksum = "9ec9d1d9e0af5039f19228a1e3149aac30acca03f1ed12983e5d832403750a00"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "bitcoin",
  "bitreq 0.3.7",
- "corepc-types 0.13.0",
+ "corepc-types 0.15.0",
  "hex-conservative 0.2.2",
  "secp256k1 0.29.1",
  "serde",
@@ -2153,9 +2132,9 @@ dependencies = [
 
 [[package]]
 name = "corepc-types"
-version = "0.13.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b96c7869aa8234d10a41cbe3a1697bcb3a2482c48d9eb3541b3a4014a81afdad"
+checksum = "86c274042a89391a324ab313b5210680969d02a9fa977733c3354aea4d7a4883"
 dependencies = [
  "bitcoin",
  "serde",
@@ -5494,14 +5473,6 @@ checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
 name = "sizzle-parser"
-version = "0.16.0"
-source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.16.0#a43cb62e88b22a4626dddc158bcd09b298c103e7"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "sizzle-parser"
 version = "0.17.0"
 source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.17.0#9e33fe8a5cafea88058c0e28dd7ef8b6716352bf"
 dependencies = [
@@ -5561,19 +5532,6 @@ dependencies = [
 
 [[package]]
 name = "ssz"
-version = "0.16.0"
-source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.16.0#a43cb62e88b22a4626dddc158bcd09b298c103e7"
-dependencies = [
- "hex",
- "itertools 0.14.0",
- "serde",
- "smallvec",
- "ssz_primitives 0.16.0",
- "thiserror",
-]
-
-[[package]]
-name = "ssz"
 version = "0.17.0"
 source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.17.0#9e33fe8a5cafea88058c0e28dd7ef8b6716352bf"
 dependencies = [
@@ -5581,28 +5539,8 @@ dependencies = [
  "itertools 0.15.0",
  "serde",
  "smallvec",
- "ssz_primitives 0.17.0",
+ "ssz_primitives",
  "thiserror",
-]
-
-[[package]]
-name = "ssz_codegen"
-version = "0.16.0"
-source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.16.0#a43cb62e88b22a4626dddc158bcd09b298c103e7"
-dependencies = [
- "prettyplease",
- "proc-macro2",
- "quote",
- "serde",
- "sizzle-parser 0.16.0",
- "ssz 0.16.0",
- "ssz_derive 0.16.0",
- "ssz_primitives 0.16.0",
- "ssz_types 0.16.0",
- "syn 2.0.119",
- "toml",
- "tree_hash 0.16.0",
- "tree_hash_derive 0.16.0",
 ]
 
 [[package]]
@@ -5614,25 +5552,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
- "sizzle-parser 0.17.0",
- "ssz 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
+ "sizzle-parser",
+ "ssz",
+ "ssz_derive",
+ "ssz_primitives",
+ "ssz_types",
  "syn 2.0.119",
  "toml",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
-]
-
-[[package]]
-name = "ssz_derive"
-version = "0.16.0"
-source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.16.0#a43cb62e88b22a4626dddc158bcd09b298c103e7"
-dependencies = [
- "darling 0.23.0",
- "quote",
- "syn 2.0.119",
+ "tree_hash",
+ "tree_hash_derive",
 ]
 
 [[package]]
@@ -5647,36 +5575,12 @@ dependencies = [
 
 [[package]]
 name = "ssz_primitives"
-version = "0.16.0"
-source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.16.0#a43cb62e88b22a4626dddc158bcd09b298c103e7"
-dependencies = [
- "hex",
- "rand 0.8.8",
- "ruint",
-]
-
-[[package]]
-name = "ssz_primitives"
 version = "0.17.0"
 source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.17.0#9e33fe8a5cafea88058c0e28dd7ef8b6716352bf"
 dependencies = [
  "hex",
  "rand 0.8.8",
  "ruint",
-]
-
-[[package]]
-name = "ssz_types"
-version = "0.16.0"
-source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.16.0#a43cb62e88b22a4626dddc158bcd09b298c103e7"
-dependencies = [
- "itertools 0.14.0",
- "serde",
- "serde_derive",
- "ssz 0.16.0",
- "ssz_primitives 0.16.0",
- "thiserror",
- "tree_hash 0.16.0",
 ]
 
 [[package]]
@@ -5687,10 +5591,10 @@ dependencies = [
  "itertools 0.15.0",
  "serde",
  "serde_derive",
- "ssz 0.17.0",
- "ssz_primitives 0.17.0",
+ "ssz",
+ "ssz_primitives",
  "thiserror",
- "tree_hash 0.17.0",
+ "tree_hash",
 ]
 
 [[package]]
@@ -5708,55 +5612,35 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "strata-asm-bridge-types"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.1#482939382eefd02ef449f041e4569c48164834f6"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0#af03330ede9200f38bd9242d42399bea94136dcd"
 dependencies = [
  "arbitrary",
- "bitcoin-bosd 0.12.0",
+ "bitcoin-bosd",
  "bitvec",
- "borsh",
  "serde",
- "ssz 0.17.0",
- "ssz_derive 0.17.0",
- "strata-btc-types 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "strata-crypto 0.3.0-alpha.1 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "thiserror",
-]
-
-[[package]]
-name = "strata-asm-bridge-types"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
-dependencies = [
- "arbitrary",
- "bitcoin-bosd 0.12.0",
- "bitvec",
- "borsh",
- "serde",
- "ssz 0.17.0",
- "ssz_derive 0.17.0",
- "strata-btc-types 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-crypto 0.3.0-alpha.1 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "ssz",
+ "ssz_derive",
+ "strata-btc-types",
+ "strata-codec",
+ "strata-crypto",
+ "strata-identifiers",
  "thiserror",
 ]
 
 [[package]]
 name = "strata-asm-common"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0#af03330ede9200f38bd9242d42399bea94136dcd"
 dependencies = [
  "bitcoin",
- "borsh",
- "ssz 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_types 0.17.0",
+ "ssz",
+ "ssz_derive",
+ "ssz_types",
  "strata-asm-manifest-types",
  "strata-asm-state",
- "strata-btc-types 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "strata-btc-types",
  "strata-btc-verification",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "strata-identifiers",
  "strata-l1-txfmt",
  "strata-merkle",
  "strata-msg-fmt",
@@ -5768,37 +5652,36 @@ dependencies = [
 [[package]]
 name = "strata-asm-manifest-types"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0#af03330ede9200f38bd9242d42399bea94136dcd"
 dependencies = [
- "borsh",
  "serde",
- "ssz 0.17.0",
- "ssz_codegen 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-crypto 0.3.0-alpha.1 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "ssz",
+ "ssz_codegen",
+ "ssz_derive",
+ "ssz_primitives",
+ "ssz_types",
+ "strata-codec",
+ "strata-crypto",
+ "strata-identifiers",
  "strata-msg-fmt",
  "thiserror",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
+ "tree_hash",
+ "tree_hash_derive",
 ]
 
 [[package]]
 name = "strata-asm-proto-bridge-txs"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0#af03330ede9200f38bd9242d42399bea94136dcd"
 dependencies = [
  "arbitrary",
  "bitcoin",
- "bitcoin-bosd 0.12.0",
- "strata-asm-bridge-types 0.1.0 (git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4)",
+ "bitcoin-bosd",
+ "strata-asm-bridge-types",
  "strata-asm-common",
- "strata-btc-types 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-crypto 0.3.0-alpha.1 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "strata-btc-types",
+ "strata-codec",
+ "strata-crypto",
  "strata-l1-txfmt",
  "thiserror",
 ]
@@ -5806,176 +5689,95 @@ dependencies = [
 [[package]]
 name = "strata-asm-state"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0#af03330ede9200f38bd9242d42399bea94136dcd"
 dependencies = [
  "serde",
- "ssz 0.17.0",
- "ssz_codegen 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
+ "ssz",
+ "ssz_codegen",
+ "ssz_derive",
+ "ssz_primitives",
+ "ssz_types",
  "strata-asm-manifest-types",
  "strata-btc-verification",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "strata-identifiers",
  "strata-l1-txfmt",
  "strata-merkle",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
+ "tree_hash",
+ "tree_hash_derive",
 ]
 
 [[package]]
 name = "strata-bridge-params"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257#3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257"
+source = "git+https://github.com/alpenlabs/alpen.git?tag=v0.4.0-rc.1#d65b7cc8945437c7f23f1c4340d55d367989d6d1"
 dependencies = [
  "serde",
- "ssz 0.16.0",
- "ssz_derive 0.16.0",
+ "ssz",
+ "ssz_derive",
  "thiserror",
 ]
 
 [[package]]
 name = "strata-btc-types"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0#60ae4f3b95d2f034b9ee0bfea698d8f5ca05234b"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
  "arbitrary",
  "bitcoin",
- "bitcoin-bosd 0.12.0",
- "borsh",
+ "bitcoin-bosd",
  "serde",
- "ssz 0.17.0",
- "ssz_codegen 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
+ "ssz",
+ "ssz_codegen",
+ "ssz_derive",
+ "ssz_primitives",
+ "ssz_types",
+ "strata-codec",
+ "strata-identifiers",
  "thiserror",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
-]
-
-[[package]]
-name = "strata-btc-types"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2#c3698c0f26d8d3d16e56a478eb375e077d813775"
-dependencies = [
- "arbitrary",
- "bitcoin",
- "bitcoin-bosd 0.9.0",
- "borsh",
- "serde",
- "ssz 0.16.0",
- "ssz_codegen 0.16.0",
- "ssz_derive 0.16.0",
- "ssz_primitives 0.16.0",
- "ssz_types 0.16.0",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
- "thiserror",
- "tree_hash 0.16.0",
- "tree_hash_derive 0.16.0",
-]
-
-[[package]]
-name = "strata-btc-types"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2#4e9dedf044e84e78cb3d2c9fbce262777735de09"
-dependencies = [
- "arbitrary",
- "bitcoin",
- "bitcoin-bosd 0.12.0",
- "borsh",
- "serde",
- "ssz 0.17.0",
- "ssz_codegen 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "thiserror",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
+ "tree_hash",
+ "tree_hash_derive",
 ]
 
 [[package]]
 name = "strata-btc-verification"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.4#a1028b13dc6486c202ad8c0aa4076dedb18fb1bf"
+source = "git+https://github.com/alpenlabs/asm?tag=v0.4.0#af03330ede9200f38bd9242d42399bea94136dcd"
 dependencies = [
  "arbitrary",
  "bitcoin",
- "borsh",
  "serde",
- "ssz 0.17.0",
- "ssz_codegen 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-btc-types 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-crypto 0.3.0-alpha.1 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "sha2",
+ "ssz",
+ "ssz_codegen",
+ "ssz_derive",
+ "ssz_primitives",
+ "ssz_types",
+ "strata-btc-types",
+ "strata-crypto",
+ "strata-identifiers",
  "thiserror",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
+ "tree_hash",
+ "tree_hash_derive",
 ]
 
 [[package]]
 name = "strata-cli-common"
 version = "0.3.0-alpha.1"
-source = "git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257#3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257"
+source = "git+https://github.com/alpenlabs/alpen.git?tag=v0.4.0-rc.1#d65b7cc8945437c7f23f1c4340d55d367989d6d1"
 
 [[package]]
 name = "strata-codec"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0#60ae4f3b95d2f034b9ee0bfea698d8f5ca05234b"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
- "strata-codec-derive 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "thiserror",
-]
-
-[[package]]
-name = "strata-codec"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2#c3698c0f26d8d3d16e56a478eb375e077d813775"
-dependencies = [
- "strata-codec-derive 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
- "thiserror",
-]
-
-[[package]]
-name = "strata-codec"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2#4e9dedf044e84e78cb3d2c9fbce262777735de09"
-dependencies = [
- "strata-codec-derive 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "strata-codec-derive",
  "thiserror",
 ]
 
 [[package]]
 name = "strata-codec-derive"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0#60ae4f3b95d2f034b9ee0bfea698d8f5ca05234b"
-dependencies = [
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "strata-codec-derive"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2#c3698c0f26d8d3d16e56a478eb375e077d813775"
-dependencies = [
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "strata-codec-derive"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2#4e9dedf044e84e78cb3d2c9fbce262777735de09"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
  "quote",
  "syn 2.0.119",
@@ -5984,150 +5786,55 @@ dependencies = [
 [[package]]
 name = "strata-crypto"
 version = "0.3.0-alpha.1"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0#60ae4f3b95d2f034b9ee0bfea698d8f5ca05234b"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
  "arbitrary",
  "bitcoin",
- "borsh",
- "hex",
- "musig2",
- "secp256k1 0.29.1",
- "serde",
- "sha2",
- "ssz 0.17.0",
- "ssz_codegen 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "thiserror",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
- "zeroize",
-]
-
-[[package]]
-name = "strata-crypto"
-version = "0.3.0-alpha.1"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2#c3698c0f26d8d3d16e56a478eb375e077d813775"
-dependencies = [
- "arbitrary",
- "bitcoin",
- "borsh",
  "hex",
  "musig2",
  "rand 0.8.8",
  "secp256k1 0.29.1",
  "serde",
  "sha2",
- "ssz 0.16.0",
- "ssz_codegen 0.16.0",
- "ssz_derive 0.16.0",
- "ssz_primitives 0.16.0",
- "ssz_types 0.16.0",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
+ "ssz",
+ "ssz_codegen",
+ "ssz_derive",
+ "ssz_primitives",
+ "ssz_types",
+ "strata-identifiers",
  "thiserror",
- "tree_hash 0.16.0",
- "tree_hash_derive 0.16.0",
- "zeroize",
-]
-
-[[package]]
-name = "strata-crypto"
-version = "0.3.0-alpha.1"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2#4e9dedf044e84e78cb3d2c9fbce262777735de09"
-dependencies = [
- "arbitrary",
- "bitcoin",
- "borsh",
- "hex",
- "musig2",
- "secp256k1 0.29.1",
- "serde",
- "sha2",
- "ssz 0.17.0",
- "ssz_codegen 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "thiserror",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
+ "tree_hash",
+ "tree_hash_derive",
  "zeroize",
 ]
 
 [[package]]
 name = "strata-identifiers"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0#60ae4f3b95d2f034b9ee0bfea698d8f5ca05234b"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
  "arbitrary",
- "borsh",
  "const-hex",
  "hex",
  "int-enum",
  "paste",
  "serde",
- "ssz 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "tree_hash 0.17.0",
- "zeroize",
-]
-
-[[package]]
-name = "strata-identifiers"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2#c3698c0f26d8d3d16e56a478eb375e077d813775"
-dependencies = [
- "arbitrary",
- "borsh",
- "const-hex",
- "hex",
- "int-enum",
- "paste",
- "serde",
- "ssz 0.16.0",
- "ssz_derive 0.16.0",
- "ssz_primitives 0.16.0",
- "ssz_types 0.16.0",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
- "tree_hash 0.16.0",
- "zeroize",
-]
-
-[[package]]
-name = "strata-identifiers"
-version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2#4e9dedf044e84e78cb3d2c9fbce262777735de09"
-dependencies = [
- "arbitrary",
- "borsh",
- "const-hex",
- "hex",
- "int-enum",
- "paste",
- "serde",
- "ssz 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
- "tree_hash 0.17.0",
+ "ssz",
+ "ssz_derive",
+ "ssz_primitives",
+ "ssz_types",
+ "strata-codec",
+ "tree_hash",
  "zeroize",
 ]
 
 [[package]]
 name = "strata-l1-txfmt"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2#4e9dedf044e84e78cb3d2c9fbce262777735de09"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
  "arbitrary",
  "bitcoin",
- "borsh",
  "serde",
  "thiserror",
 ]
@@ -6135,27 +5842,26 @@ dependencies = [
 [[package]]
 name = "strata-merkle"
 version = "0.2.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2#4e9dedf044e84e78cb3d2c9fbce262777735de09"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
- "borsh",
  "digest 0.10.7",
  "serde",
  "sha2",
- "ssz 0.17.0",
- "ssz_codegen 0.17.0",
- "ssz_derive 0.17.0",
- "ssz_primitives 0.17.0",
- "ssz_types 0.17.0",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "ssz",
+ "ssz_codegen",
+ "ssz_derive",
+ "ssz_primitives",
+ "ssz_types",
+ "strata-codec",
  "thiserror",
- "tree_hash 0.17.0",
- "tree_hash_derive 0.17.0",
+ "tree_hash",
+ "tree_hash_derive",
 ]
 
 [[package]]
 name = "strata-msg-fmt"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2#4e9dedf044e84e78cb3d2c9fbce262777735de09"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
  "thiserror",
 ]
@@ -6163,63 +5869,40 @@ dependencies = [
 [[package]]
 name = "strata-ol-bridge-types"
 version = "0.3.0-alpha.1"
-source = "git+https://github.com/alpenlabs/alpen.git?rev=efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b#efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b"
+source = "git+https://github.com/alpenlabs/alpen.git?tag=v0.4.0-rc.1#d65b7cc8945437c7f23f1c4340d55d367989d6d1"
 dependencies = [
  "arbitrary",
- "borsh",
- "serde",
- "ssz 0.17.0",
- "ssz_derive 0.17.0",
- "strata-asm-bridge-types 0.1.0 (git+https://github.com/alpenlabs/asm?tag=v0.4.0-rc.1)",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "strata-primitives 0.3.0-alpha.1 (git+https://github.com/alpenlabs/alpen.git?rev=efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b)",
+ "strata-asm-bridge-types",
+ "strata-codec",
+ "strata-identifiers",
  "thiserror",
 ]
 
 [[package]]
 name = "strata-primitives"
 version = "0.3.0-alpha.1"
-source = "git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257#3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257"
+source = "git+https://github.com/alpenlabs/alpen.git?tag=v0.4.0-rc.1#d65b7cc8945437c7f23f1c4340d55d367989d6d1"
 dependencies = [
  "bitcoin",
- "bitcoin-bosd 0.11.0",
- "borsh",
+ "bitcoin-bosd",
  "hex",
  "serde",
- "strata-btc-types 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
- "strata-crypto 0.3.0-alpha.1 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
- "thiserror",
-]
-
-[[package]]
-name = "strata-primitives"
-version = "0.3.0-alpha.1"
-source = "git+https://github.com/alpenlabs/alpen.git?rev=efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b#efef51b876f1fe82eccdf9f0e4e5f8b69c2a9e3b"
-dependencies = [
- "bitcoin",
- "bitcoin-bosd 0.12.0",
- "borsh",
- "hex",
- "serde",
- "strata-btc-types 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "strata-crypto 0.3.0-alpha.1 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
- "thiserror",
+ "strata-btc-types",
+ "strata-crypto",
+ "strata-identifiers",
 ]
 
 [[package]]
 name = "strata-test-utils-btcio"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/alpen.git?rev=3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257#3a44a2e4b1f9ec8a2e8fd1a52912d6d8c4398257"
+source = "git+https://github.com/alpenlabs/alpen.git?tag=v0.4.0-rc.1#d65b7cc8945437c7f23f1c4340d55d367989d6d1"
 dependencies = [
  "anyhow",
  "bitcoin",
  "bitcoind-async-client",
  "corepc-node",
  "musig2",
- "strata-crypto 0.3.0-alpha.1 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
+ "strata-crypto",
  "tokio",
 ]
 
@@ -6618,38 +6301,15 @@ dependencies = [
 
 [[package]]
 name = "tree_hash"
-version = "0.16.0"
-source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.16.0#a43cb62e88b22a4626dddc158bcd09b298c103e7"
-dependencies = [
- "digest 0.10.7",
- "sha2",
- "smallvec",
- "ssz 0.16.0",
- "ssz_primitives 0.16.0",
- "thiserror",
-]
-
-[[package]]
-name = "tree_hash"
 version = "0.17.0"
 source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.17.0#9e33fe8a5cafea88058c0e28dd7ef8b6716352bf"
 dependencies = [
  "digest 0.10.7",
  "sha2",
  "smallvec",
- "ssz 0.17.0",
- "ssz_primitives 0.17.0",
+ "ssz",
+ "ssz_primitives",
  "thiserror",
-]
-
-[[package]]
-name = "tree_hash_derive"
-version = "0.16.0"
-source = "git+https://github.com/alpenlabs/ssz-gen?tag=v0.16.0#a43cb62e88b22a4626dddc158bcd09b298c103e7"
-dependencies = [
- "darling 0.23.0",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -7474,7 +7134,7 @@ dependencies = [
 [[package]]
 name = "zkaleido-logging"
 version = "0.1.0"
-source = "git+https://github.com/alpenlabs/zkaleido?tag=v0.3.0#8205a0543d4e60e7a7d8e73da483ffb83765c4e9"
+source = "git+https://github.com/alpenlabs/zkaleido?tag=v0.4.0#675183920c830a30cc512874d5ec039e57d1a188"
 dependencies = [
  "tracing",
 ]

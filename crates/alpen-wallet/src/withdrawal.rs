@@ -55,10 +55,17 @@ pub fn resolve_withdrawal_amount(
 
 #[cfg(test)]
 mod tests {
+    use strata_bridge_params::DEFAULT_MAX_WITHDRAWAL_DESCRIPTOR_LEN;
+
     use super::*;
 
     fn params() -> BridgeParams {
-        BridgeParams::new(100_000_000, Some(1_000_000_000)).unwrap()
+        BridgeParams::new_with_descriptor_limit(
+            100_000_000,
+            Some(1_000_000_000),
+            DEFAULT_MAX_WITHDRAWAL_DESCRIPTOR_LEN,
+        )
+        .unwrap()
     }
 
     #[test]
