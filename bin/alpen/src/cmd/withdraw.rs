@@ -11,6 +11,7 @@ use strata_primitives::bitcoin_bosd::Descriptor;
 use crate::{
     alpen::AlpenWallet,
     bitcoin::BitcoinWallet,
+    fees::{Gwei, resolve_eip1559_fees},
     link::{OnchainObject, PrettyPrint},
     seed::Seed,
     settings::Settings,
@@ -32,6 +33,14 @@ pub struct WithdrawArgs {
     /// selected operator index for withdrawal assignment
     #[argh(option)]
     operator: Option<u32>,
+
+    /// maximum Alpen EIP-1559 fee per gas, in decimal gwei
+    #[argh(option)]
+    max_fee_per_gas: Option<Gwei>,
+
+    /// maximum Alpen EIP-1559 priority fee per gas, in decimal gwei
+    #[argh(option)]
+    max_priority_fee_per_gas: Option<Gwei>,
 }
 
 pub async fn withdraw(
@@ -39,6 +48,8 @@ pub async fn withdraw(
     seed: Seed,
     settings: Settings,
 ) -> Result<(), DisplayedError> {
+    let fees = resolve_eip1559_fees(args.max_fee_per_gas, args.max_priority_fee_per_gas)?;
+
     let address = args
         .address
         .map(|a| {
@@ -90,6 +101,7 @@ pub async fn withdraw(
         bridge_out_amount,
         bosd,
         args.operator,
+        fees,
     );
 
     let pb = ProgressBar::new_spinner().with_message("Broadcasting transaction");

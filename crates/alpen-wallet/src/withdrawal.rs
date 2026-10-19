@@ -1,5 +1,5 @@
 //! Bridge withdrawal amount validation and transaction encoding.
-use crate::SATS_TO_WEI;
+use crate::{Eip1559Fees, SATS_TO_WEI};
 use alloy::{
     network::TransactionBuilder,
     primitives::{Address, U256},
@@ -18,6 +18,7 @@ pub fn withdrawal_request(
     amount: Amount,
     bosd: Descriptor,
     operator: Option<u32>,
+    fees: Option<Eip1559Fees>,
 ) -> TransactionRequest {
     let selected_operator = match operator {
         Some(idx) => OperatorSelection::specific(idx),
@@ -28,10 +29,14 @@ pub fn withdrawal_request(
         bosd: bosd.to_bytes(),
     }
     .encode();
-    TransactionRequest::default()
+    let tx = TransactionRequest::default()
         .with_to(bridge)
         .with_value(U256::from(amount.to_sat() as u128 * SATS_TO_WEI))
-        .input(TransactionInput::new(calldata.into()))
+        .input(TransactionInput::new(calldata.into()));
+    match fees {
+        Some(fees) => fees.apply(tx),
+        None => tx,
+    }
 }
 
 /// Resolves the withdrawal amount from an optional user-provided value.
