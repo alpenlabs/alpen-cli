@@ -775,7 +775,7 @@ dependencies = [
  "sled",
  "strata-asm-proto-bridge-txs",
  "strata-cli-common",
- "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0-rc.2)",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "strata-identifiers 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0)",
  "strata-l1-txfmt",
  "strata-ol-bridge-types",
@@ -5942,6 +5942,14 @@ version = "0.1.0"
 source = "git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2#c3698c0f26d8d3d16e56a478eb375e077d813775"
 dependencies = [
  "strata-codec-derive 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.3.0-rc.2)",
+ "thiserror",
+]
+
+[[package]]
+name = "strata-codec"
+version = "0.1.0"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
+dependencies = [
  "thiserror",
 ]
 
