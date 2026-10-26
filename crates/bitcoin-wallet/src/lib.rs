@@ -22,9 +22,13 @@ use std::{
 use backend::{BitcoinBackend, ScanError, SyncError, UpdateError, WalletUpdate};
 use bdk_esplora::esplora_client::{self, AsyncClient};
 use bdk_wallet::{
-    PersistedWallet, Wallet,
-    bitcoin::{FeeRate, Network},
+    PersistedWallet, SignOptions, Wallet,
+    bitcoin::{
+        FeeRate, Network, Psbt,
+        psbt::{GetKey, SigningErrors},
+    },
     chain::keychain_txout::DEFAULT_LOOKAHEAD,
+    signer::SignerError,
 };
 use persist::Persister;
 use rusqlite::{self, Connection};
@@ -49,6 +53,21 @@ pub async fn get_fee_rate(
     fee_rate.max(FeeRate::BROADCAST_MIN)
 }
 
+/// Signs `psbt` with the caller-owned `signer`, then finalizes it against `wallet`'s descriptors.
+///
+/// Returns whether every input was finalized.
+pub fn sign_psbt(
+    wallet: &Wallet,
+    signer: &impl GetKey,
+    psbt: &mut Psbt,
+) -> Result<bool, OneOf<(SigningErrors, SignerError)>> {
+    psbt.sign(signer, wallet.secp_ctx())
+        .map_err(|(_, errors)| OneOf::new(errors))?;
+    wallet
+        .finalize_psbt(psbt, SignOptions::default())
+        .map_err(OneOf::new)
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::{
@@ -63,8 +82,15 @@ pub(crate) mod tests {
 
     use async_trait::async_trait;
     use bdk_wallet::{
-        KeychainKind,
-        bitcoin::{FeeRate, Network, ScriptBuf, Transaction},
+        KeychainKind, Wallet,
+        bitcoin::{
+            Amount, FeeRate, Network, OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Txid,
+            XOnlyPublicKey, absolute,
+            hashes::Hash,
+            secp256k1::Message,
+            sighash::{Prevouts, SighashCache, TapSighashType},
+            taproot, transaction,
+        },
         chain::{
             CheckPoint,
             spk_client::{FullScanRequestBuilder, SyncRequestBuilder},
@@ -72,12 +98,12 @@ pub(crate) mod tests {
     };
     use terrors::OneOf;
 
-    use alpen_wallet_keys::Seed;
+    use alpen_wallet_keys::{SECP256K1, Seed};
 
     use super::{
         BitcoinBackend, BitcoinWallet, DEFAULT_LOOKAHEAD, SyncError,
         backend::{BroadcastTxError, GetFeeRateError, InvalidFee, ScanError, UpdateSender},
-        get_fee_rate, lookahead_for_scan_state, scan_wallet,
+        get_fee_rate, lookahead_for_scan_state, scan_wallet, sign_psbt,
     };
 
     #[derive(Debug, Default)]
@@ -224,6 +250,80 @@ pub(crate) mod tests {
             .unwrap();
 
         assert_eq!(backend.scan_stop_gap.load(Ordering::Relaxed), 500);
+    }
+
+    #[test]
+    fn loads_wallets_created_from_private_descriptors() {
+        // Wallets created before the BDK 3.2 upgrade were built from xprv descriptors.
+        let seed = Seed::from_entropy([0; 16]);
+        let rootpriv = seed.bitcoin_signer(Network::Signet);
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        Wallet::create(
+            format!("tr({rootpriv}/86h/0h/0h/0/*)"),
+            format!("tr({rootpriv}/86h/0h/0h/1/*)"),
+        )
+        .network(Network::Signet)
+        .create_wallet(&mut connection)
+        .unwrap();
+
+        let (load, _) = seed.bitcoin_wallet(Network::Signet).split();
+        let loaded = load
+            .check_network(Network::Signet)
+            .load_wallet(&mut connection)
+            .unwrap();
+
+        assert!(loaded.is_some());
+    }
+
+    #[test]
+    fn seed_signer_signs_seed_wallet_spends() {
+        let seed = Seed::from_entropy([0; 16]);
+        let (_, create) = seed.bitcoin_wallet(Network::Regtest).split();
+        let mut wallet = create
+            .network(Network::Regtest)
+            .create_wallet_no_persist()
+            .unwrap();
+        let address = wallet.reveal_next_address(KeychainKind::External).address;
+        let funding = Transaction {
+            version: transaction::Version::TWO,
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::new(Txid::from_byte_array([1; 32]), 0),
+                ..Default::default()
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(100_000),
+                script_pubkey: address.script_pubkey(),
+            }],
+        };
+        wallet.apply_unconfirmed_txs([(funding.clone(), 0)]);
+        let mut psbt = {
+            let mut builder = wallet.build_tx();
+            builder.drain_wallet().drain_to(address.script_pubkey());
+            builder.finish().unwrap()
+        };
+
+        assert!(sign_psbt(&wallet, &seed.bitcoin_signer(Network::Regtest), &mut psbt).unwrap());
+
+        // The finalizer does not check signatures, so verify the key-path spend here.
+        let tx = psbt.extract_tx().unwrap();
+        let sighash = SighashCache::new(&tx)
+            .taproot_key_spend_signature_hash(
+                0,
+                &Prevouts::All(&funding.output),
+                TapSighashType::Default,
+            )
+            .unwrap();
+        let signature = taproot::Signature::from_slice(&tx.input[0].witness[0]).unwrap();
+        let output_key =
+            XOnlyPublicKey::from_slice(&address.script_pubkey().as_bytes()[2..]).unwrap();
+        SECP256K1
+            .verify_schnorr(
+                &signature.signature,
+                &Message::from_digest(sighash.to_byte_array()),
+                &output_key,
+            )
+            .unwrap();
     }
 }
 

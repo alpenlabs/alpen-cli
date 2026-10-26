@@ -6,16 +6,21 @@ use crate::{
     constants::RECOVERY_DESC_CLEANUP_DELAY,
     get_fee_rate,
     recovery::DescriptorRecovery,
-    sync_wallet,
+    sign_psbt, sync_wallet,
 };
 use alpen_wallet_keys::{SECP256K1, Seed};
 use bdk_wallet::{
     KeychainKind, Wallet,
-    bitcoin::{Address, Amount, FeeRate, Network, PrivateKey, ScriptBuf, Txid, XOnlyPublicKey},
+    bitcoin::{
+        Address, Amount, FeeRate, Network, PrivateKey, ScriptBuf, Txid, XOnlyPublicKey,
+        psbt::GetKey,
+    },
     chain::ChainOracle,
     coin_selection::InsufficientFunds,
-    descriptor::IntoWalletDescriptor,
+    descriptor::{Condition, ExtractPolicy, IntoWalletDescriptor, policy::BuildSatisfaction},
     error::CreateTxError,
+    miniscript::descriptor::KeyMapWrapper,
+    signer::SignersContainer,
 };
 use chrono::Utc;
 use std::{
@@ -105,15 +110,7 @@ pub async fn recover(
 
     let mut drained_recovery_scripts = HashSet::new();
     for (key, desc) in descs {
-        let desc = desc
-            .clone()
-            .into_wallet_descriptor(l1w.secp_ctx(), settings.network.into())
-            .internal_error("Failed to convert to wallet descriptor")?;
-
-        let mut recovery_wallet = Wallet::create_single(desc)
-            .network(settings.network)
-            .create_wallet_no_persist()
-            .internal_error("Failed to create recovery wallet")?;
+        let (mut recovery_wallet, reclaim_signer) = create_recovery_wallet(desc, settings.network)?;
 
         // reveal the address for the wallet so we can sync it
         let address = recovery_wallet
@@ -138,7 +135,15 @@ pub async fn recover(
             address: address.clone(),
             counter: None,
         });
-        drain_recovery_path(&mut recovery_wallet, &mut l1w, &settings, fee_rate, report).await?;
+        drain_recovery_path(
+            &mut recovery_wallet,
+            &reclaim_signer,
+            &mut l1w,
+            &settings,
+            fee_rate,
+            report,
+        )
+        .await?;
         drained_recovery_scripts.insert(address.script_pubkey());
     }
 
@@ -159,10 +164,44 @@ pub async fn recover(
     Ok(())
 }
 
-/// Drains `recovery_wallet`'s reclaim path (policy path index 1: recovery pubkey + timelock,
-/// see [`bridge_in_descriptor`]) to `l1w`, signing and broadcasting the spend.
+/// Creates a watch-only wallet for a deposit descriptor, keeping its reclaim key as a signer.
+pub(crate) fn create_recovery_wallet(
+    descriptor: impl IntoWalletDescriptor,
+    network: Network,
+) -> Result<(Wallet, KeyMapWrapper), DisplayedError> {
+    let (descriptor, keymap) = descriptor
+        .into_wallet_descriptor(&SECP256K1, network.into())
+        .internal_error("Failed to convert to wallet descriptor")?;
+    let wallet = Wallet::create_single(descriptor)
+        .network(network)
+        .create_wallet_no_persist()
+        .internal_error("Failed to create recovery wallet")?;
+    Ok((wallet, KeyMapWrapper::from(keymap)))
+}
+
+/// Returns the timelock condition for the reclaim path (policy path index 1: recovery pubkey +
+/// timelock, see [`bridge_in_descriptor`]).
+pub(crate) fn reclaim_condition(recovery_wallet: &Wallet) -> Condition {
+    // Signers only affect the policy's satisfaction fields, which `get_condition` ignores.
+    let policy = recovery_wallet
+        .public_descriptor(KeychainKind::External)
+        .extract_policy(
+            &SignersContainer::default(),
+            BuildSatisfaction::None,
+            recovery_wallet.secp_ctx(),
+        )
+        .expect("valid descriptor use")
+        .expect("a policy");
+    policy
+        .get_condition(&BTreeMap::from([(policy.id.clone(), vec![1])]))
+        .expect("reclaim path to exist")
+}
+
+/// Drains `recovery_wallet`'s reclaim path to `l1w`, signing with `reclaim_signer` and
+/// broadcasting the spend.
 async fn drain_recovery_path(
     recovery_wallet: &mut Wallet,
+    reclaim_signer: &impl GetKey,
     l1w: &mut BitcoinWallet,
     settings: &RecoveryConfig,
     fee_rate: FeeRate,
@@ -177,19 +216,13 @@ async fn drain_recovery_path(
         .internal_error("Failed to persist Bitcoin wallet")?;
     report(RecoveryEvent::Destination(recover_to.clone()));
 
-    let policy = recovery_wallet
-        .policies(KeychainKind::External)
-        .expect("valid descriptor use")
-        .expect("a policy");
+    // we want to spend via the 2nd option - the recovery + delay
+    let condition = reclaim_condition(recovery_wallet);
 
     // we want to drain the recovery path to the l1 wallet
     let mut psbt = {
         let mut builder = recovery_wallet.build_tx();
-        // we want to spend via the 2nd option - the recovery + delay
-        builder.policy_path(
-            BTreeMap::from([(policy.id, vec![1])]),
-            KeychainKind::External,
-        );
+        builder.set_condition(condition);
         builder.drain_wallet();
         builder.drain_to(recover_to.script_pubkey());
         builder.fee_rate(fee_rate);
@@ -206,9 +239,7 @@ async fn drain_recovery_path(
     };
 
     assert!(
-        recovery_wallet
-            .sign(&mut psbt, Default::default())
-            .expect("sign to be ok"),
+        sign_psbt(recovery_wallet, reclaim_signer, &mut psbt).expect("sign to be ok"),
         "transaction should be finalized"
     );
 
@@ -234,7 +265,7 @@ fn seed_recovery_wallet(
     seed: &Seed,
     settings: &RecoveryConfig,
     counter: u32,
-) -> Result<Wallet, DisplayedError> {
+) -> Result<(Wallet, KeyMapWrapper), DisplayedError> {
     let reclaim_keypair = seed.drt_reclaim_keypair(counter);
     let (secret_key, _) = even_kp((reclaim_keypair.secret_key, reclaim_keypair.public_key));
     let recovery_private_key = PrivateKey::new(secret_key.into(), settings.network);
@@ -243,14 +274,7 @@ fn seed_recovery_wallet(
         recovery_private_key,
         settings.recovery_delay,
     );
-    let wallet_descriptor = descriptor
-        .into_wallet_descriptor(&SECP256K1, settings.network.into())
-        .internal_error("Failed to convert to wallet descriptor")?;
-
-    Wallet::create_single(wallet_descriptor)
-        .network(settings.network)
-        .create_wallet_no_persist()
-        .internal_error("Failed to create recovery wallet")
+    create_recovery_wallet(descriptor, settings.network)
 }
 
 /// Finds reclaim-key counters with on-chain history in gap-limit-sized backend scans.
@@ -274,7 +298,9 @@ async fn discover_seed_candidates(
     // Counter 0 initializes an empty allocator; the first deposit is allocated counter 1.
     let mut batch_start = 1u32;
     let mut consecutive_unused = 0u32;
-    let scan_checkpoint = seed_recovery_wallet(seed, settings, 1)?.latest_checkpoint();
+    let scan_checkpoint = seed_recovery_wallet(seed, settings, 1)?
+        .0
+        .latest_checkpoint();
 
     loop {
         let batch_end = batch_start
@@ -284,7 +310,7 @@ async fn discover_seed_candidates(
         let mut scripts_to_scan = Vec::with_capacity(settings.seed_recovery_gap_limit as usize);
 
         for counter in batch_start..batch_end {
-            let mut wallet = seed_recovery_wallet(seed, settings, counter)?;
+            let (mut wallet, _) = seed_recovery_wallet(seed, settings, counter)?;
             let script_pubkey = wallet
                 .reveal_next_address(KeychainKind::External)
                 .address
@@ -360,7 +386,7 @@ async fn recover_from_seed(
         }
 
         let counter = candidate.counter;
-        let mut recovery_wallet = seed_recovery_wallet(seed, settings, counter)?;
+        let (mut recovery_wallet, reclaim_signer) = seed_recovery_wallet(seed, settings, counter)?;
         let address = recovery_wallet
             .reveal_next_address(KeychainKind::External)
             .address;
@@ -397,7 +423,15 @@ async fn recover_from_seed(
                 address,
                 counter: Some(counter),
             });
-            drain_recovery_path(&mut recovery_wallet, l1w, settings, fee_rate, report).await?;
+            drain_recovery_path(
+                &mut recovery_wallet,
+                &reclaim_signer,
+                l1w,
+                settings,
+                fee_rate,
+                report,
+            )
+            .await?;
         }
     }
 
@@ -434,6 +468,7 @@ mod tests {
     fn script_for_counter(seed: &Seed, settings: &RecoveryConfig, counter: u32) -> ScriptBuf {
         seed_recovery_wallet(seed, settings, counter)
             .unwrap()
+            .0
             .reveal_next_address(KeychainKind::External)
             .address
             .script_pubkey()

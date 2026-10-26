@@ -98,7 +98,12 @@ pub async fn drain(
         let fee_rate = get_fee_rate(fee_rate, settings.bitcoin_backend.as_ref()).await;
         log_fee_rate(&fee_rate);
 
-        let tx = build_drain(&mut l1w, &address, fee_rate)?;
+        let tx = build_drain(
+            &mut l1w,
+            &seed.bitcoin_signer(settings.network),
+            &address,
+            fee_rate,
+        )?;
         settings
             .bitcoin_backend
             .broadcast_tx(&tx)

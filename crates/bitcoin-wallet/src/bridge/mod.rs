@@ -5,7 +5,7 @@ use bdk_wallet::{
     KeychainKind, TxOrdering, Wallet,
     bitcoin::{
         Address as BitcoinAddress, Amount, FeeRate, Network, PrivateKey, Transaction, TxOut,
-        XOnlyPublicKey,
+        XOnlyPublicKey, psbt::GetKey,
     },
     coin_selection::InsufficientFunds,
     descriptor::IntoWalletDescriptor,
@@ -20,6 +20,8 @@ use strata_l1_txfmt::{MagicBytes, ParseConfig};
 use strata_ol_bridge_types::DepositDescriptor;
 use strata_primitives::crypto::even_kp;
 
+use crate::sign_psbt;
+
 /// Serial of the Alpen EE account used in deposit descriptors.
 ///
 /// System serials occupy `0..SYSTEM_RESERVED_ACCTS`, so the Alpen EE account
@@ -30,6 +32,7 @@ pub const ALPEN_EE_ACCT_SERIAL: AccountSerial = AccountSerial::new(SYSTEM_RESERV
 /// bridge output in 1.
 pub fn build_deposit_request_tx(
     l1w: &mut Wallet,
+    signer: &impl GetKey,
     header_aux: &DrtHeaderAux,
     deposit_output: &TxOut,
     magic_bytes: MagicBytes,
@@ -58,8 +61,8 @@ pub fn build_deposit_request_tx(
         Err(e) => panic!("Unexpected error in creating PSBT: {e:?}"),
     }?;
 
-    l1w.sign(&mut psbt, Default::default())
-        .expect("tx should be signed");
+    let finalized = sign_psbt(l1w, signer, &mut psbt).expect("tx should be signed");
+    assert!(finalized, "tx should be finalized");
     Ok(psbt.extract_tx().expect("tx should be signed and ready"))
 }
 
@@ -152,7 +155,7 @@ pub fn compute_recover_at_height(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, str::FromStr, sync::Arc};
+    use std::{str::FromStr, sync::Arc};
 
     use bdk_wallet::{
         bitcoin::{Amount, FeeRate, Network, bip32::Xpriv},
@@ -167,6 +170,7 @@ mod tests {
     use strata_test_utils_btcio::BtcioTestHarness;
 
     use super::*;
+    use crate::recover::{create_recovery_wallet, reclaim_condition};
 
     /// Populate the wallet with on-chain data by replaying blocks from the corepc node.
     fn sync_wallet_from_node(wallet: &mut Wallet, harness: &BtcioTestHarness) {
@@ -278,6 +282,7 @@ mod tests {
 
         let tx = build_deposit_request_tx(
             &mut wallet,
+            &xpriv,
             &header_aux,
             &deposit_output,
             MagicBytes::new(*b"ALPN"),
@@ -327,10 +332,9 @@ mod tests {
         harness
             .mine_blocks_blocking(usize::from(RECOVER_DELAY), None)
             .expect("recovery delay should elapse");
-        let mut recovery_wallet = Wallet::create_single(bridge_in_desc)
-            .network(Network::Regtest)
-            .create_wallet_no_persist()
-            .expect("valid recovery wallet");
+        let (mut recovery_wallet, reclaim_signer) =
+            create_recovery_wallet(bridge_in_desc, Network::Regtest)
+                .expect("valid recovery wallet");
         assert_eq!(
             recovery_wallet
                 .reveal_next_address(KeychainKind::External)
@@ -338,22 +342,15 @@ mod tests {
             bridge_in_address
         );
         sync_wallet_from_node(&mut recovery_wallet, &harness);
-        let policy = recovery_wallet
-            .policies(KeychainKind::External)
-            .expect("valid policy")
-            .expect("recovery policy");
+        let condition = reclaim_condition(&recovery_wallet);
         let mut builder = recovery_wallet.build_tx();
-        builder.policy_path(
-            BTreeMap::from([(policy.id, vec![1])]),
-            KeychainKind::External,
-        );
+        builder.set_condition(condition);
         builder.drain_wallet();
         builder.drain_to(fund_address.script_pubkey());
         builder.fee_rate(FeeRate::from_sat_per_vb(1).expect("valid fee rate"));
         let mut psbt = builder.finish().expect("reclaim transaction should build");
         assert!(
-            recovery_wallet
-                .sign(&mut psbt, Default::default())
+            sign_psbt(&recovery_wallet, &reclaim_signer, &mut psbt)
                 .expect("reclaim transaction should sign")
         );
         let reclaim = psbt.extract_tx().expect("finalized reclaim transaction");

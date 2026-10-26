@@ -6,7 +6,9 @@ use std::sync::LazyLock;
 
 use aes_gcm_siv::{Aes256GcmSiv, KeyInit, Nonce, Tag, aead::AeadMutInPlace};
 use alloy::{network::EthereumWallet, signers::local::PrivateKeySigner};
-use bdk_wallet::{CreateParams, KeychainKind, LoadParams, Wallet};
+use bdk_wallet::{
+    CreateParams, KeychainKind, LoadParams, Wallet, descriptor::IntoWalletDescriptor,
+};
 use bip39::{Language, Mnemonic};
 use bitcoin::{
     Network,
@@ -151,19 +153,32 @@ impl Seed {
         Ok(EncryptedSeed(buf))
     }
 
-    pub fn bitcoin_wallet(&self, network: Network) -> BaseWallet {
+    /// Returns the BIP32 master key that signs PSBTs built by [`Self::bitcoin_wallet`].
+    ///
+    /// BDK no longer keeps signing keys, so pass this to [`Psbt::sign`](bitcoin::Psbt::sign).
+    pub fn bitcoin_signer(&self, network: Network) -> Xpriv {
         let mnemonic = Mnemonic::from_entropy(self.0.as_ref()).expect("valid entropy");
         // We do not use a passphrase.
         let bip39_seed = mnemonic.to_seed("");
-        let rootpriv = Xpriv::new_master(network, &bip39_seed).expect("valid xpriv");
+        Xpriv::new_master(network, &bip39_seed).expect("valid xpriv")
+    }
+
+    /// Returns watch-only wallet parameters; sign with [`Self::bitcoin_signer`].
+    pub fn bitcoin_wallet(&self, network: Network) -> BaseWallet {
+        let rootpriv = self.bitcoin_signer(network);
         let base_desc = format!("tr({rootpriv}/86h/0h/0h");
-        let external_desc = format!("{base_desc}/0/*)");
-        let internal_desc = format!("{base_desc}/1/*)");
+        // BDK persists only the public half, so existing wallets still load.
+        let public_desc = |desc: String| {
+            desc.into_wallet_descriptor(&SECP256K1, network.into())
+                .expect("valid descriptor")
+                .0
+        };
+        let external_desc = public_desc(format!("{base_desc}/0/*)"));
+        let internal_desc = public_desc(format!("{base_desc}/1/*)"));
         BaseWallet(
             Wallet::load()
                 .descriptor(KeychainKind::External, Some(external_desc.clone()))
-                .descriptor(KeychainKind::Internal, Some(internal_desc.clone()))
-                .extract_keys(),
+                .descriptor(KeychainKind::Internal, Some(internal_desc.clone())),
             Wallet::create(external_desc, internal_desc),
         )
     }
