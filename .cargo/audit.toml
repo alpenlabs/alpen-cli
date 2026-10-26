@@ -1,0 +1,23 @@
+[advisories]
+ignore = [
+  # crypto-bigint 0.5.5 timing side channels in operations meant to be
+  # constant-time, fixed only in crypto-bigint 0.7.6. It comes in through
+  # elliptic-curve 0.13.8 and k256 0.13.4: alloy-signer 2.5.0 depends on both
+  # directly and alloy-primitives 1.7.3 depends on k256, and these are the
+  # latest alloy releases. Getting crypto-bigint 0.7 needs alloy on k256 0.14
+  # and elliptic-curve 0.14, so the lockfile cannot pick up the fix.
+  #
+  # Exposure: k256 0.13 does secp256k1 scalar arithmetic with crypto-bigint, so
+  # signing EVM transactions with the PrivateKeySigner from
+  # `Seed::get_alpen_wallet` runs the private key through the affected
+  # subtraction code. Exploiting this needs an attacker who can observe timing
+  # or microarchitectural state on the user's machine while the CLI signs; the
+  # CLI signs only when the user runs a command and exposes no signing service.
+  # Bitcoin signing uses libsecp256k1 through the secp256k1 crate and does not
+  # touch crypto-bigint.
+  #
+  # Tracked upstream in https://github.com/alloy-rs/alloy/issues/4445 (k256 0.14
+  # for alloy-primitives in https://github.com/alloy-rs/core/pull/1147). Remove
+  # this entry once alloy-signer and alloy-primitives depend on k256 0.14.
+  "RUSTSEC-2026-0387",
+]
