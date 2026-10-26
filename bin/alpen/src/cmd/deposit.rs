@@ -129,6 +129,7 @@ pub async fn deposit(
 
     let tx = build_deposit_request_tx(
         &mut l1w,
+        &seed.bitcoin_signer(settings.network),
         &header_aux,
         &deposit_output,
         settings.magic_bytes,

@@ -1,7 +1,7 @@
 //! Bitcoin transfer and drain transaction construction.
-use crate::BitcoinWallet;
+use crate::{BitcoinWallet, sign_psbt};
 use bdk_wallet::{
-    bitcoin::{Address, Amount, FeeRate, Transaction},
+    bitcoin::{Address, Amount, FeeRate, Transaction, psbt::GetKey},
     coin_selection::InsufficientFunds,
     error::CreateTxError,
 };
@@ -10,6 +10,7 @@ use strata_cli_common::errors::{DisplayableError, DisplayedError};
 /// Builds, persists, and signs a transfer to the checked address.
 pub fn build_transfer(
     wallet: &mut BitcoinWallet,
+    signer: &impl GetKey,
     address: &Address,
     amount: Amount,
     fee_rate: FeeRate,
@@ -32,9 +33,8 @@ pub fn build_transfer(
     wallet
         .persist()
         .internal_error("Failed to persist Bitcoin wallet")?;
-    wallet
-        .sign(&mut psbt, Default::default())
-        .expect("tx should be signed");
+    let finalized = sign_psbt(wallet, signer, &mut psbt).expect("tx should be signed");
+    assert!(finalized, "tx should be finalized");
     let tx = psbt.extract_tx().expect("tx should be signed and ready");
     Ok(tx)
 }
@@ -42,6 +42,7 @@ pub fn build_transfer(
 /// Builds and signs a transaction draining spendable wallet funds.
 pub fn build_drain(
     wallet: &mut BitcoinWallet,
+    signer: &impl GetKey,
     address: &Address,
     fee_rate: FeeRate,
 ) -> Result<Transaction, DisplayedError> {
@@ -61,9 +62,8 @@ pub fn build_drain(
             Err(e) => panic!("Unexpected error in creating PSBT: {e:?}"),
         }
     };
-    wallet
-        .sign(&mut psbt, Default::default())
-        .expect("tx should be signed");
+    let finalized = sign_psbt(wallet, signer, &mut psbt).expect("tx should be signed");
+    assert!(finalized, "tx should be finalized");
     let tx = psbt.extract_tx().expect("tx should be signed and ready");
     Ok(tx)
 }
