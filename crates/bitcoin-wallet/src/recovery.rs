@@ -206,7 +206,7 @@ impl DescriptorRecovery {
 
     pub async fn open(seed: &Seed, descriptor_db: &Path) -> io::Result<Self> {
         let key = seed.descriptor_recovery_key();
-        let cipher = Aes256GcmSiv::new(&key.into());
+        let cipher = Aes256GcmSiv::new((&*key).into());
         let db = sled::open(descriptor_db)?;
         let counter_tree = db.open_tree(b"reclaim_counter")?;
         Ok(Self {

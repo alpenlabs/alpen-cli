@@ -7,13 +7,16 @@ use std::sync::LazyLock;
 use aes_gcm_siv::{Aes256GcmSiv, KeyInit, Nonce, Tag, aead::AeadMutInPlace};
 use alloy::{network::EthereumWallet, signers::local::PrivateKeySigner};
 use bdk_wallet::{
-    CreateParams, KeychainKind, LoadParams, Wallet, descriptor::IntoWalletDescriptor,
+    CreateParams, KeychainKind, LoadParams, Wallet,
+    descriptor::{ExtendedDescriptor, IntoWalletDescriptor},
+    miniscript::descriptor::{DescriptorPublicKey, DescriptorXKey, Wildcard},
 };
 use bip39::{Language, Mnemonic};
 use bitcoin::{
-    Network,
-    bip32::{ChildNumber, DerivationPath, Xpriv},
-    secp256k1::{All, PublicKey, Secp256k1, SecretKey},
+    Network, PrivateKey,
+    bip32::{ChildNumber, DerivationPath, Xpriv, Xpub},
+    psbt::{GetKey, GetKeyError, KeyRequest},
+    secp256k1::{All, PublicKey, Secp256k1, SecretKey, Signing},
 };
 use password::{HashVersion, Password};
 use rand_core::CryptoRngCore;
@@ -22,8 +25,8 @@ use terrors::OneOf;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::constants::{
-    AES_NONCE_LEN, AES_TAG_LEN, BIP44_ALPEN_EVM_WALLET_PATH, DRT_RECLAIM_PURPOSE, PW_SALT_LEN,
-    SEED_LEN,
+    AES_NONCE_LEN, AES_TAG_LEN, BIP44_ALPEN_EVM_WALLET_PATH, BIP86_ACCOUNT_PATH,
+    DRT_RECLAIM_PURPOSE, PW_SALT_LEN, SEED_LEN,
 };
 
 /// Shared secp256k1 context for wallet key derivation, signing, and verification.
@@ -50,6 +53,63 @@ impl Zeroize for DrtReclaimKeypair {
 impl ZeroizeOnDrop for DrtReclaimKeypair {}
 
 impl Drop for DrtReclaimKeypair {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+/// A BIP32 extended private key that wipes its private key and chain code on drop.
+///
+/// [`Xpriv`] is [`Copy`], so this cannot stop copies from being made: rust-bitcoin copies it
+/// internally while deriving and signing, and dereferencing [`Self::as_xpriv`] copies it out of
+/// the wrapper. It only guarantees that the copy it owns is erased.
+#[expect(
+    missing_debug_implementations,
+    reason = "Struct contains a private key that should not be debug printed"
+)]
+pub struct ZeroizingXpriv(Xpriv);
+
+impl ZeroizingXpriv {
+    /// Borrows the wrapped key. Prefer passing the wrapper itself (it implements [`GetKey`]) over
+    /// copying the [`Xpriv`] out, as copies are not erased.
+    pub fn as_xpriv(&self) -> &Xpriv {
+        &self.0
+    }
+
+    /// Derives a child key, wrapped so it is erased on drop too.
+    fn derive_priv(&self, path: &impl AsRef<[ChildNumber]>) -> Self {
+        Self(
+            self.0
+                .derive_priv(&SECP256K1, path)
+                .expect("valid derivation path"),
+        )
+    }
+}
+
+impl GetKey for ZeroizingXpriv {
+    type Error = GetKeyError;
+
+    fn get_key<C: Signing>(
+        &self,
+        key_request: KeyRequest,
+        secp: &Secp256k1<C>,
+    ) -> Result<Option<PrivateKey>, Self::Error> {
+        self.0.get_key(key_request, secp)
+    }
+}
+
+impl Zeroize for ZeroizingXpriv {
+    fn zeroize(&mut self) {
+        // NOTE: `SecretKey::non_secure_erase` writes `1`s to the memory.
+        self.0.private_key.non_secure_erase();
+        let chain_code: &mut [u8] = self.0.chain_code.as_mut();
+        chain_code.zeroize();
+    }
+}
+
+impl ZeroizeOnDrop for ZeroizingXpriv {}
+
+impl Drop for ZeroizingXpriv {
     fn drop(&mut self) {
         self.zeroize();
     }
@@ -89,11 +149,15 @@ impl Seed {
         Mnemonic::from_entropy_in(language, self.0.as_ref()).expect("valid entropy")
     }
 
-    pub fn descriptor_recovery_key(&self) -> [u8; 32] {
+    pub fn descriptor_recovery_key(&self) -> Zeroizing<[u8; 32]> {
         let mut hasher = <Sha256 as Digest>::new(); // this is to appease the analyzer
         hasher.update(b"alpen labs alpen descriptor recovery file 2024");
         hasher.update(self.0.as_slice());
-        hasher.finalize().into()
+        // Hash straight into the zeroizing buffer rather than returning a temporary array.
+        let mut key = Zeroizing::new([0u8; 32]);
+        let key_bytes: &mut [u8; 32] = &mut key;
+        hasher.finalize_into(key_bytes.into());
+        key
     }
 
     /// Derives the deposit-request reclaim keypair for the given counter.
@@ -108,15 +172,15 @@ impl Seed {
     /// the BIP39 PBKDF2 seed used by the signet wallet. Changing this would make existing deposit
     /// requests unrecoverable.
     pub fn drt_reclaim_keypair(&self, counter: u32) -> DrtReclaimKeypair {
-        let rootpriv = Xpriv::new_master(Network::Signet, self.0.as_ref()).expect("valid xpriv");
+        let rootpriv = ZeroizingXpriv(
+            Xpriv::new_master(Network::Signet, self.0.as_ref()).expect("valid xpriv"),
+        );
         let path = DerivationPath::master().extend([
             DRT_RECLAIM_PURPOSE,
             ChildNumber::from_hardened_idx(counter).expect("counter fits in 31 bits"),
         ]);
-        let derived = rootpriv
-            .derive_priv(&SECP256K1, &path)
-            .expect("valid derivation path");
-        let secret_key = derived.private_key;
+        let derived = rootpriv.derive_priv(&path);
+        let secret_key = derived.0.private_key;
         let public_key = PublicKey::from_secret_key(&SECP256K1, &secret_key);
         DrtReclaimKeypair {
             secret_key,
@@ -153,28 +217,25 @@ impl Seed {
         Ok(EncryptedSeed(buf))
     }
 
+    /// Returns the BIP32 master key derived from the BIP39 seed (no passphrase) of this entropy.
+    fn bip39_master_key(&self, network: Network) -> ZeroizingXpriv {
+        let mnemonic = Mnemonic::from_entropy(self.0.as_ref()).expect("valid entropy");
+        // We do not use a passphrase.
+        let bip39_seed = Zeroizing::new(mnemonic.to_seed(""));
+        ZeroizingXpriv(Xpriv::new_master(network, bip39_seed.as_ref()).expect("valid xpriv"))
+    }
+
     /// Returns the BIP32 master key that signs PSBTs built by [`Self::bitcoin_wallet`].
     ///
     /// BDK no longer keeps signing keys, so pass this to [`Psbt::sign`](bitcoin::Psbt::sign).
-    pub fn bitcoin_signer(&self, network: Network) -> Xpriv {
-        let mnemonic = Mnemonic::from_entropy(self.0.as_ref()).expect("valid entropy");
-        // We do not use a passphrase.
-        let bip39_seed = mnemonic.to_seed("");
-        Xpriv::new_master(network, &bip39_seed).expect("valid xpriv")
+    /// The key is erased when the returned value is dropped.
+    pub fn bitcoin_signer(&self, network: Network) -> ZeroizingXpriv {
+        self.bip39_master_key(network)
     }
 
     /// Returns watch-only wallet parameters; sign with [`Self::bitcoin_signer`].
     pub fn bitcoin_wallet(&self, network: Network) -> BaseWallet {
-        let rootpriv = self.bitcoin_signer(network);
-        let base_desc = format!("tr({rootpriv}/86h/0h/0h");
-        // BDK persists only the public half, so existing wallets still load.
-        let public_desc = |desc: String| {
-            desc.into_wallet_descriptor(&SECP256K1, network.into())
-                .expect("valid descriptor")
-                .0
-        };
-        let external_desc = public_desc(format!("{base_desc}/0/*)"));
-        let internal_desc = public_desc(format!("{base_desc}/1/*)"));
+        let (external_desc, internal_desc) = self.bitcoin_descriptors(network);
         BaseWallet(
             Wallet::load()
                 .descriptor(KeychainKind::External, Some(external_desc.clone()))
@@ -183,25 +244,47 @@ impl Seed {
         )
     }
 
+    /// Returns the external and internal BIP-86 descriptors, `tr([fp/86h/0h/0h]xpub/{0,1}/*)`.
+    ///
+    /// These are built from the account xpub rather than by parsing an xprv descriptor string, so
+    /// no private key is ever serialized. They equal what BDK derives from
+    /// `tr(<rootpriv>/86h/0h/0h/{0,1}/*)`, so wallets created that way still load.
+    fn bitcoin_descriptors(&self, network: Network) -> (ExtendedDescriptor, ExtendedDescriptor) {
+        let rootpriv = self.bitcoin_signer(network);
+        let fingerprint = rootpriv.0.fingerprint(&SECP256K1);
+        let account_xpub =
+            Xpub::from_priv(&SECP256K1, &rootpriv.derive_priv(&BIP86_ACCOUNT_PATH).0);
+        let descriptor = |keychain: u32| {
+            let key = DescriptorPublicKey::XPub(DescriptorXKey {
+                origin: Some((fingerprint, BIP86_ACCOUNT_PATH.into())),
+                xkey: account_xpub,
+                derivation_path: [ChildNumber::from_normal_idx(keychain).expect("valid index")]
+                    .as_slice()
+                    .into(),
+                wildcard: Wildcard::Unhardened,
+            });
+            ExtendedDescriptor::new_tr(key, None)
+                .expect("valid descriptor")
+                .into_wallet_descriptor(&SECP256K1, network.into())
+                .expect("valid descriptor")
+                .0
+        };
+        (descriptor(0), descriptor(1))
+    }
+
     pub fn get_alpen_wallet(&self) -> EthereumWallet {
         let derivation_path = DerivationPath::master().extend(BIP44_ALPEN_EVM_WALLET_PATH);
 
-        let mnemonic = Mnemonic::from_entropy(self.0.as_ref()).expect("valid entropy");
-        // We do not use a passphrase.
-        let bip39_seed = mnemonic.to_seed("");
         // Network choice affects how extended public and private keys are serialized. See
         // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#serialization-format.
         // Given the popularity of MetaMask, we follow their example (they always hardcode mainnet)
         // and hardcode Network::Bitcoin (mainnet) for EVM-based wallet.
-        let master_key = Xpriv::new_master(Network::Bitcoin, &bip39_seed).expect("valid xpriv");
+        let master_key = self.bip39_master_key(Network::Bitcoin);
 
         // Derive the child key for the given path
-        let derived_key = master_key
-            .derive_priv(&SECP256K1, &derivation_path)
-            .unwrap();
-        let signer =
-            PrivateKeySigner::from_slice(derived_key.private_key.secret_bytes().as_slice())
-                .expect("valid slice");
+        let derived_key = master_key.derive_priv(&derivation_path);
+        let secret_bytes = Zeroizing::new(derived_key.0.private_key.secret_bytes());
+        let signer = PrivateKeySigner::from_slice(secret_bytes.as_slice()).expect("valid slice");
 
         EthereumWallet::from(signer)
     }
@@ -259,6 +342,8 @@ pub mod password;
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use rand_core::OsRng;
     use sha2::digest::generic_array::GenericArray;
 
@@ -452,5 +537,86 @@ mod test {
             address.to_string(),
             "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr"
         );
+    }
+
+    #[test]
+    // Pins the signer and the watch-only descriptors to BIP-86's official rootpriv and account
+    // xpub for the all-zero entropy mnemonic.
+    // https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki#test-vectors
+    fn bitcoin_signer_and_descriptors_match_bip86_test_vector() {
+        let seed = Seed([0u8; SEED_LEN].into());
+        let signer = seed.bitcoin_signer(Network::Bitcoin);
+        assert_eq!(
+            signer.as_xpriv().to_string(),
+            "xprv9s21ZrQH143K3GJpoapnV8SFfukcVBSfeCficPSGfubmSFDxo1kuHnLisriDvSnRRuL2Qrg5ggqHKNVpxR86QEC8w35uxmGoggxtQTPvfUu"
+        );
+
+        let (external, internal) = seed.bitcoin_descriptors(Network::Bitcoin);
+        let account_xpub = "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ";
+        assert_eq!(
+            external.to_string(),
+            ExtendedDescriptor::from_str(&format!("tr([73c5da0a/86'/0'/0']{account_xpub}/0/*)"))
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            internal.to_string(),
+            ExtendedDescriptor::from_str(&format!("tr([73c5da0a/86'/0'/0']{account_xpub}/1/*)"))
+                .unwrap()
+                .to_string()
+        );
+    }
+
+    #[test]
+    // The public descriptors must be identical to what BDK derived from the xprv descriptors used
+    // before, or existing wallets would fail to load.
+    fn bitcoin_descriptors_match_legacy_xprv_descriptors() {
+        let seeds = [
+            Seed([0u8; SEED_LEN].into()),
+            Seed([0xFF; SEED_LEN].into()),
+            Seed::generate(&mut OsRng),
+        ];
+        for seed in &seeds {
+            for network in [
+                Network::Bitcoin,
+                Network::Testnet,
+                Network::Signet,
+                Network::Regtest,
+            ] {
+                let rootpriv = *seed.bitcoin_signer(network).as_xpriv();
+                let legacy = |keychain: u32| {
+                    format!("tr({rootpriv}/86h/0h/0h/{keychain}/*)")
+                        .into_wallet_descriptor(&SECP256K1, network.into())
+                        .unwrap()
+                        .0
+                };
+                let (external, internal) = seed.bitcoin_descriptors(network);
+                assert_eq!(external, legacy(0));
+                assert_eq!(internal, legacy(1));
+            }
+        }
+    }
+
+    #[test]
+    fn zeroizing_xpriv_erases_key_material() {
+        let seed = Seed([0u8; SEED_LEN].into());
+        let mut signer = seed.bitcoin_signer(Network::Bitcoin);
+        let original = *signer.as_xpriv();
+
+        signer.zeroize();
+
+        assert_ne!(signer.as_xpriv().private_key, original.private_key);
+        assert_eq!(signer.as_xpriv().chain_code.as_bytes(), &[0u8; 32]);
+    }
+
+    #[test]
+    // The descriptor recovery DB is encrypted under this key, so it must never change.
+    fn descriptor_recovery_key_is_stable() {
+        let seed = Seed([0x42; SEED_LEN].into());
+        let mut preimage = b"alpen labs alpen descriptor recovery file 2024".to_vec();
+        preimage.extend_from_slice(&[0x42; SEED_LEN]);
+        let expected: [u8; 32] = Sha256::digest(&preimage).into();
+
+        assert_eq!(*seed.descriptor_recovery_key(), expected);
     }
 }
