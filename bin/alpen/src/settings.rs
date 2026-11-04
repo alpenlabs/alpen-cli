@@ -4,11 +4,16 @@ use std::{
     env::var,
     error::Error,
     fmt,
-    fs::{File, create_dir_all},
+    fs::{DirBuilder, File, OpenOptions, create_dir_all},
     io,
     path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, LazyLock},
+};
+#[cfg(unix)]
+use std::{
+    fs::metadata,
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
 };
 
 use alloy::primitives::Address as AlpenAddress;
@@ -35,6 +40,17 @@ const PROJ_DIRS_ENV: &str = "PROJ_DIRS";
 const CONFIG_FILE_ENV: &str = "CLI_CONFIG";
 /// Default file name for the CLI config within the config directory.
 const DEFAULT_CONFIG_FILENAME: &str = "config.toml";
+/// Config key holding the Bitcoin Core RPC password.
+const RPC_PASSWORD_KEY: &str = "bitcoind_rpc_pw";
+/// Owner-only permissions for directories the CLI creates to hold its config.
+#[cfg(unix)]
+const CONFIG_DIR_MODE: u32 = 0o700;
+/// Owner-only permissions for config files the CLI creates.
+#[cfg(unix)]
+const CONFIG_FILE_MODE: u32 = 0o600;
+/// Group and world read bits.
+#[cfg(unix)]
+const READABLE_BY_OTHERS: u32 = 0o044;
 
 /// A complete Alpen deployment, including its Bitcoin anchor network.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -257,15 +273,17 @@ impl Settings {
         proj_dirs: &ProjectDirs,
         config_file: &Path,
     ) -> Result<Self, OneOf<(io::Error, config::ConfigError)>> {
-        create_dir_all(proj_dirs.config_dir()).map_err(OneOf::new)?;
+        create_config_dir(proj_dirs.config_dir()).map_err(OneOf::new)?;
         create_dir_all(proj_dirs.data_dir()).map_err(OneOf::new)?;
 
-        // create config file if not exists
-        let _ = File::create_new(config_file);
+        // Best effort: if the file is missing and cannot be created, building the config below
+        // reports the missing file together with its path.
+        let _ = create_config_file(config_file);
         let root_config = Config::builder()
             .add_source(config::File::from(config_file))
             .build()
             .map_err(OneOf::new)?;
+        warn_if_credentials_exposed(config_file, &root_config);
 
         let selector = root_config
             .clone()
@@ -280,10 +298,12 @@ impl Settings {
                 ))
             })?;
             let profile_file = resolve_profile_path(config_file, profiles.get(profile));
-            let from_file = Config::builder()
+            let profile_config = Config::builder()
                 .add_source(config::File::from(profile_file.as_path()))
                 .build()
-                .map_err(OneOf::new)?
+                .map_err(OneOf::new)?;
+            warn_if_credentials_exposed(&profile_file, &profile_config);
+            let from_file = profile_config
                 .try_deserialize::<SettingsFromFile>()
                 .map_err(OneOf::new)?;
             validate_profile_network(profile, from_file.network).map_err(OneOf::new)?;
@@ -390,6 +410,66 @@ impl Settings {
             recovery_delay: from_file.recovery_delay,
         })
     }
+}
+
+/// Creates `path` and any missing parents, restricting new directories to the owner on Unix.
+///
+/// Existing directories keep their permissions.
+fn create_config_dir(path: &Path) -> io::Result<()> {
+    let mut builder = DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    builder.mode(CONFIG_DIR_MODE);
+    builder.create(path)
+}
+
+/// Creates an empty config file readable only by its owner on Unix.
+///
+/// Fails with [`io::ErrorKind::AlreadyExists`] and leaves the file untouched if it exists.
+fn create_config_file(path: &Path) -> io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(CONFIG_FILE_MODE);
+    options.open(path)
+}
+
+/// Warns on stderr when `config`, loaded from `path`, holds the Bitcoin Core RPC password
+/// and other users can read the file.
+///
+/// The file is left unchanged: it may be user-managed (for example a profile file shared with a
+/// group on purpose), so the user decides whether to tighten it.
+fn warn_if_credentials_exposed(path: &Path, config: &Config) {
+    if let Some(mode) = exposed_credentials_mode(path, config) {
+        eprintln!(
+            "Warning: {} contains {RPC_PASSWORD_KEY} but is readable by other users \
+             (mode {mode:03o}). Restrict it with `chmod 600 {}`.",
+            path.display(),
+            path.display(),
+        );
+    }
+}
+
+/// Returns the permission bits of `path` when `config` holds the Bitcoin Core RPC password
+/// and the file is group- or world-readable.
+fn exposed_credentials_mode(path: &Path, config: &Config) -> Option<u32> {
+    if config.get_string(RPC_PASSWORD_KEY).is_err() {
+        return None;
+    }
+    readable_by_others_mode(path)
+}
+
+/// Returns the permission bits of `path` when its group or world read bit is set.
+#[cfg(unix)]
+fn readable_by_others_mode(path: &Path) -> Option<u32> {
+    let mode = metadata(path).ok()?.permissions().mode() & 0o777;
+    (mode & READABLE_BY_OTHERS != 0).then_some(mode)
+}
+
+/// Unix permission bits do not apply on this platform.
+#[cfg(not(unix))]
+fn readable_by_others_mode(_path: &Path) -> Option<u32> {
+    None
 }
 
 fn resolve_recovery_lookahead(configured: Option<u32>) -> Result<u32, ConfigError> {
@@ -537,6 +617,8 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use std::fs::write;
+    #[cfg(unix)]
+    use std::fs::{Permissions, read_to_string, set_permissions};
 
     use serde::de::value::{Error as ValueError, StringDeserializer};
     use tempfile::tempdir;
@@ -773,6 +855,144 @@ mod tests {
             parsed.max_withdrawal_descriptor_len,
             reparsed.max_withdrawal_descriptor_len
         );
+    }
+
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    fn set_mode(path: &Path, mode: u32) {
+        set_permissions(path, Permissions::from_mode(mode)).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn file_config(path: &Path) -> Config {
+        Config::builder()
+            .add_source(config::File::from(path))
+            .build()
+            .unwrap()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creates_missing_config_dir_and_file_for_owner_only() {
+        let temp = tempdir().unwrap();
+        let project_root = temp.path().join("nested").join("alpen");
+        let config_file = project_root.join(DEFAULT_CONFIG_FILENAME);
+
+        // The empty config lacks required fields, so loading fails after creating both paths.
+        assert!(Settings::load_from_paths(project_root.clone(), &config_file).is_err());
+
+        assert_eq!(mode_of(&temp.path().join("nested")), CONFIG_DIR_MODE);
+        assert_eq!(mode_of(&project_root), CONFIG_DIR_MODE);
+        assert_eq!(mode_of(&config_file), CONFIG_FILE_MODE);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn leaves_existing_config_file_and_dir_untouched() {
+        let root = tempdir().unwrap();
+        set_mode(root.path(), 0o755);
+        let config_file = root.path().join(DEFAULT_CONFIG_FILENAME);
+        write(&config_file, "network = \"signet\"\n").unwrap();
+        set_mode(&config_file, 0o644);
+
+        create_config_dir(root.path()).unwrap();
+        let error = create_config_file(&config_file).unwrap_err();
+
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(mode_of(root.path()), 0o755);
+        assert_eq!(mode_of(&config_file), 0o644);
+        assert_eq!(
+            read_to_string(&config_file).unwrap(),
+            "network = \"signet\"\n"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn flags_rpc_password_files_readable_by_group_or_world() {
+        let root = tempdir().unwrap();
+        let config_file = root.path().join(DEFAULT_CONFIG_FILENAME);
+        write(&config_file, "bitcoind_rpc_pw = \"secret\"\n").unwrap();
+        let config = file_config(&config_file);
+
+        for (mode, expected) in [
+            (0o644, Some(0o644)),
+            (0o640, Some(0o640)),
+            (0o604, Some(0o604)),
+            (0o600, None),
+            (0o400, None),
+        ] {
+            set_mode(&config_file, mode);
+            assert_eq!(
+                exposed_credentials_mode(&config_file, &config),
+                expected,
+                "mode {mode:03o}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_readable_files_without_rpc_password() {
+        let root = tempdir().unwrap();
+        let config_file = root.path().join(DEFAULT_CONFIG_FILENAME);
+        write(&config_file, "bitcoind_rpc_cookie = \"/tmp/.cookie\"\n").unwrap();
+        set_mode(&config_file, 0o644);
+
+        assert_eq!(
+            exposed_credentials_mode(&config_file, &file_config(&config_file)),
+            None
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn loads_profile_with_exposed_rpc_password_without_modifying_it() {
+        let root = tempdir().unwrap();
+        let config_file = root.path().join(DEFAULT_CONFIG_FILENAME);
+        write(
+            &config_file,
+            "active_profile = \"testnet\"\n[profiles]\nmainnet = \"mainnet.toml\"\ntestnet = \"testnet.toml\"\n",
+        )
+        .unwrap();
+        let testnet = root.path().join("testnet.toml");
+        write(
+            &testnet,
+            r#"
+                bitcoind_rpc_user = "user"
+                bitcoind_rpc_pw = "secret"
+                bitcoind_rpc_endpoint = "http://127.0.0.1:38332"
+                alpen_endpoint = "https://rpc.testnet.example.com"
+                bridge_pubkey = "1d3e9c0417ba7d3551df5a1cc1dbe227aa4ce89161762454d92bfc2b1d5886f7"
+                network = "signet"
+                magic_bytes = "ALPN"
+                bridge_denomination_sats = 100000000
+                recovery_delay = 36
+                max_withdrawal_descriptor_len = 81
+            "#,
+        )
+        .unwrap();
+        set_mode(&config_file, 0o644);
+        set_mode(&testnet, 0o644);
+
+        // The dispatcher holds no password; only the active profile is flagged.
+        assert_eq!(
+            exposed_credentials_mode(&config_file, &file_config(&config_file)),
+            None
+        );
+        assert_eq!(
+            exposed_credentials_mode(&testnet, &file_config(&testnet)),
+            Some(0o644)
+        );
+
+        // Exposure is reported, not fatal, and the user's file keeps its mode.
+        let settings = Settings::load_from_paths(root.path().to_owned(), &config_file).unwrap();
+        assert_eq!(settings.profile, Some(DeploymentProfile::Testnet));
+        assert_eq!(mode_of(&testnet), 0o644);
     }
 
     #[test]

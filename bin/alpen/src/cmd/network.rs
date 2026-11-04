@@ -92,6 +92,11 @@ fn replace_active_profile(
 #[cfg(test)]
 mod tests {
     use std::fs::{read_to_string, write};
+    #[cfg(unix)]
+    use std::{
+        fs::{Permissions, metadata, set_permissions},
+        os::unix::fs::PermissionsExt,
+    };
 
     use tempfile::tempdir;
 
@@ -153,8 +158,17 @@ mod tests {
         )
         .unwrap();
 
+        #[cfg(unix)]
+        set_permissions(&config_file, Permissions::from_mode(0o644)).unwrap();
+
         set_active_profile(&config_file, DeploymentProfile::Mainnet).unwrap();
 
+        // The rewrite goes through an owner-only temporary file, so it also tightens the config.
+        #[cfg(unix)]
+        assert_eq!(
+            metadata(&config_file).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         assert_eq!(
             read_to_string(config_file).unwrap(),
             "# selected deployment\nactive_profile = \"mainnet\"\n\n[profiles]\ntestnet = \"testnet.toml\"\nmainnet = \"mainnet.toml\"\n"
