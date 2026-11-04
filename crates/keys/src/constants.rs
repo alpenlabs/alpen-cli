@@ -23,6 +23,16 @@ pub const AES_TAG_LEN: usize = 16;
 /// value is still the same as when that deposit was made.
 pub const DRT_RECLAIM_PURPOSE: ChildNumber = ChildNumber::Hardened { index: 43_000 };
 
+/// BIP-86 account path, `m/86'/0'/0'`, of the Bitcoin wallet.
+///
+/// Coin type `0'` is used on every network, including test networks. Don't change this: it
+/// determines the addresses of existing wallets.
+pub const BIP86_ACCOUNT_PATH: &[ChildNumber] = &[
+    ChildNumber::Hardened { index: 86 },
+    ChildNumber::Hardened { index: 0 },
+    ChildNumber::Hardened { index: 0 },
+];
+
 /// Alpen CLI [`DerivationPath`](bdk_wallet::bitcoin::bip32::DerivationPath) for Alpen EVM wallet
 ///
 /// This corresponds to the path: `m/44'/60'/0'/0/0`.

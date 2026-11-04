@@ -256,7 +256,8 @@ pub(crate) mod tests {
     fn loads_wallets_created_from_private_descriptors() {
         // Wallets created before the BDK 3.2 upgrade were built from xprv descriptors.
         let seed = Seed::from_entropy([0; 16]);
-        let rootpriv = seed.bitcoin_signer(Network::Signet);
+        let signer = seed.bitcoin_signer(Network::Signet);
+        let rootpriv = signer.as_xpriv();
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
         Wallet::create(
             format!("tr({rootpriv}/86h/0h/0h/0/*)"),
