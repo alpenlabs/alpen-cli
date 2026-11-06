@@ -1,6 +1,6 @@
 //! Deposit recovery from persisted descriptors and deterministic seed-derived keys.
 use crate::{
-    BitcoinWallet,
+    BitcoinWallet, FeeRateError,
     backend::BitcoinBackend,
     bridge::{bridge_in_descriptor, compute_recover_at_height},
     constants::RECOVERY_DESC_CLEANUP_DELAY,
@@ -43,6 +43,8 @@ pub struct RecoveryConfig {
     pub finality_depth: u32,
     pub recovery_lookahead: u32,
     pub seed_recovery_gap_limit: u32,
+    /// Highest fee rate recovery pays.
+    pub max_fee_rate: FeeRate,
 }
 
 /// Recovery progress reported to the caller for presentation.
@@ -68,6 +70,9 @@ fn cleanup_delay_elapsed(recover_at: u32, current_height: u32) -> bool {
     current_height >= recover_at.saturating_add(RECOVERY_DESC_CLEANUP_DELAY)
 }
 
+/// Recovers deposits whose reclaim path has matured.
+///
+/// `fee_rate` is passed to [`get_fee_rate`] with the configured [`RecoveryConfig::max_fee_rate`].
 pub async fn recover(
     fee_rate: Option<u64>,
     seed: Seed,
@@ -105,7 +110,13 @@ pub async fn recover(
         report(RecoveryEvent::NoDescriptors);
     }
 
-    let fee_rate = get_fee_rate(fee_rate, settings.bitcoin_backend.as_ref()).await;
+    let fee_rate = get_fee_rate(
+        fee_rate,
+        settings.max_fee_rate,
+        settings.bitcoin_backend.as_ref(),
+    )
+    .await
+    .map_err(FeeRateError::into_displayed_error)?;
     report(RecoveryEvent::FeeRate(fee_rate));
 
     let mut drained_recovery_scripts = HashSet::new();
@@ -447,7 +458,7 @@ mod tests {
     use std::{path::PathBuf, str::FromStr};
 
     use super::*;
-    use crate::tests::TestBitcoinBackend;
+    use crate::{constants::DEFAULT_MAX_FEE_RATE, tests::TestBitcoinBackend};
 
     fn test_recovery_settings(gap_limit: u32) -> RecoveryConfig {
         RecoveryConfig {
@@ -462,6 +473,7 @@ mod tests {
             finality_depth: 6,
             recovery_lookahead: 50,
             seed_recovery_gap_limit: gap_limit,
+            max_fee_rate: DEFAULT_MAX_FEE_RATE,
         }
     }
 

@@ -13,7 +13,8 @@ use strata_cli_common::errors::DisplayedError;
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "recover")]
 pub struct RecoverArgs {
-    /// override Bitcoin fee rate in sat/vbyte; the effective rate is at least 1
+    /// override Bitcoin fee rate in sat/vbyte; the effective rate is at least 1 and at most
+    /// max_fee_rate_sat_per_vb from the config (default 1000)
     #[argh(option)]
     fee_rate: Option<u64>,
 }

@@ -1,6 +1,6 @@
 use crate::{
     alpen::AlpenWallet,
-    bitcoin::{BitcoinWallet, get_fee_rate},
+    bitcoin::{BitcoinWallet, FeeRateError, get_fee_rate},
     cmd::recover::reconstruct_reclaim_counter,
     constants::BITCOIN_BLOCK_TIME,
     fees::log_fee_rate,
@@ -30,7 +30,8 @@ pub struct DepositArgs {
     #[argh(positional)]
     alpen_address: Option<String>,
 
-    /// override Bitcoin fee rate in sat/vbyte; the effective rate is at least 1
+    /// override Bitcoin fee rate in sat/vbyte; the effective rate is at least 1 and at most
+    /// max_fee_rate_sat_per_vb from the config (default 1000)
     #[argh(option)]
     fee_rate: Option<u64>,
 }
@@ -71,6 +72,17 @@ pub async fn deposit(
         drt_amount.to_string().green(),
         alpen_address.to_string().cyan(),
     );
+
+    // Pick the fee rate before reserving a reclaim key: a rejected fee must not burn a counter,
+    // since unused counters can push later deposits past the seed-recovery gap limit.
+    let fee_rate = get_fee_rate(
+        fee_rate,
+        settings.max_fee_rate,
+        settings.bitcoin_backend.as_ref(),
+    )
+    .await
+    .map_err(FeeRateError::into_displayed_error)?;
+    log_fee_rate(&fee_rate);
 
     let mut desc_file = DescriptorRecovery::open(&seed, &settings.descriptor_db)
         .await
@@ -123,9 +135,6 @@ pub async fn deposit(
         "Using {} as bridge in address",
         bridge_in_address.to_string().yellow()
     );
-
-    let fee_rate = get_fee_rate(fee_rate, settings.bitcoin_backend.as_ref()).await;
-    log_fee_rate(&fee_rate);
 
     let tx = build_deposit_request_tx(
         &mut l1w,
