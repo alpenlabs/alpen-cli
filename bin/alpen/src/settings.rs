@@ -18,7 +18,7 @@ use std::{
 
 use alloy::primitives::Address as AlpenAddress;
 use bdk_bitcoind_rpc::bitcoincore_rpc::{Auth, Client};
-use bdk_wallet::bitcoin::{Amount, Network, XOnlyPublicKey};
+use bdk_wallet::bitcoin::{Amount, FeeRate, Network, XOnlyPublicKey};
 use config::{Config, ConfigError};
 use directories::ProjectDirs;
 use serde::{Deserialize, Deserializer, Serialize, de};
@@ -30,6 +30,7 @@ use crate::{
     bitcoin::{
         EsploraClient,
         backend::{BitcoinBackend, BitcoinCoreClient},
+        constants::DEFAULT_MAX_FEE_RATE_SAT_PER_VB,
     },
     constants::*,
 };
@@ -179,6 +180,10 @@ pub struct SettingsFromFile {
     /// and must be greater than 0. Smaller values stop sooner but can miss deposits after fewer
     /// unused counters and require more Bitcoin Core full-chain scans.
     pub seed_recovery_gap_limit: Option<u32>,
+    /// Highest Bitcoin fee rate, in sat/vB, that commands will pay. Applies to `--fee-rate` and
+    /// to backend estimates; anything above it is rejected, not clamped. Defaults to 1000 and must
+    /// be at least 1.
+    pub max_fee_rate_sat_per_vb: Option<u64>,
     /// L1 network the wallet operates on (for example, Bitcoin mainnet or signet).
     ///
     /// Must match the network the ASM is anchored to.
@@ -233,6 +238,8 @@ pub struct Settings {
     pub recovery_lookahead: u32,
     /// Consecutive unused reclaim-key counters that end seed recovery.
     pub seed_recovery_gap_limit: u32,
+    /// Highest Bitcoin fee rate commands will pay.
+    pub max_fee_rate: FeeRate,
     pub bridge_params: BridgeParams,
     /// L1 network the wallet operates on.
     pub network: Network,
@@ -383,6 +390,8 @@ impl Settings {
                 .map_err(OneOf::new)?;
         let recovery_lookahead =
             resolve_recovery_lookahead(from_file.recovery_lookahead).map_err(OneOf::new)?;
+        let max_fee_rate =
+            resolve_max_fee_rate(from_file.max_fee_rate_sat_per_vb).map_err(OneOf::new)?;
 
         Ok(Settings {
             esplora: from_file.esplora,
@@ -404,6 +413,7 @@ impl Settings {
             finality_depth: from_file.finality_depth.unwrap_or(DEFAULT_FINALITY_DEPTH),
             recovery_lookahead,
             seed_recovery_gap_limit,
+            max_fee_rate,
             bridge_params,
             network: from_file.network,
             magic_bytes: from_file.magic_bytes,
@@ -492,6 +502,25 @@ fn resolve_seed_recovery_gap_limit(configured: Option<u32>) -> Result<u32, Confi
     Ok(gap_limit)
 }
 
+/// Resolves the fee-rate cap, defaulting to [`DEFAULT_MAX_FEE_RATE_SAT_PER_VB`].
+///
+/// The cap must be at least [`FeeRate::BROADCAST_MIN`] (1 sat/vB); a lower cap would reject every
+/// transaction the wallet can broadcast.
+fn resolve_max_fee_rate(configured: Option<u64>) -> Result<FeeRate, ConfigError> {
+    let sat_per_vb = configured.unwrap_or(DEFAULT_MAX_FEE_RATE_SAT_PER_VB);
+    let max_fee_rate = FeeRate::from_sat_per_vb(sat_per_vb).ok_or_else(|| {
+        ConfigError::Message(format!(
+            "max_fee_rate_sat_per_vb of {sat_per_vb} is out of range"
+        ))
+    })?;
+    if max_fee_rate < FeeRate::BROADCAST_MIN {
+        return Err(ConfigError::Message(
+            "max_fee_rate_sat_per_vb must be at least 1".to_owned(),
+        ));
+    }
+    Ok(max_fee_rate)
+}
+
 /// Reads the active deployment without constructing network clients or opening wallet state.
 pub fn active_deployment_profile(config_file: &Path) -> Result<ActiveDeployment, ConfigError> {
     let config = Config::builder()
@@ -553,6 +582,7 @@ pub fn validate_deployment_profile(
     .map_err(|error| {
         ConfigError::Message(format!("invalid bridge Alpen address in config: {error}"))
     })?;
+    resolve_max_fee_rate(profile_settings.max_fee_rate_sat_per_vb)?;
     Ok(())
 }
 
@@ -610,6 +640,7 @@ impl Settings {
             finality_depth: self.finality_depth,
             recovery_lookahead: self.recovery_lookahead,
             seed_recovery_gap_limit: self.seed_recovery_gap_limit,
+            max_fee_rate: self.max_fee_rate,
         }
     }
 }
@@ -792,6 +823,7 @@ mod tests {
         assert_eq!(parsed.recovery_delay, 1_008);
         assert_eq!(parsed.recovery_lookahead, None);
         assert_eq!(parsed.seed_recovery_gap_limit, None);
+        assert_eq!(parsed.max_fee_rate_sat_per_vb, None);
         assert_eq!(parsed.max_withdrawal_amount_sats, Some(1_000_000_000));
         assert_eq!(parsed.max_withdrawal_descriptor_len, 81);
     }
@@ -813,6 +845,7 @@ mod tests {
             recovery_delay = 1008
             recovery_lookahead = 75
             seed_recovery_gap_limit = 60
+            max_fee_rate_sat_per_vb = 500
             max_withdrawal_descriptor_len = 81
         "#;
 
@@ -850,6 +883,11 @@ mod tests {
         assert_eq!(
             parsed.seed_recovery_gap_limit,
             reparsed.seed_recovery_gap_limit
+        );
+        assert_eq!(parsed.max_fee_rate_sat_per_vb, Some(500));
+        assert_eq!(
+            parsed.max_fee_rate_sat_per_vb,
+            reparsed.max_fee_rate_sat_per_vb
         );
         assert_eq!(
             parsed.max_withdrawal_descriptor_len,
@@ -1009,6 +1047,41 @@ mod tests {
         assert!(resolve_seed_recovery_gap_limit(Some(0)).is_err());
         assert_eq!(resolve_seed_recovery_gap_limit(Some(1)).unwrap(), 1);
         assert_eq!(resolve_seed_recovery_gap_limit(Some(2)).unwrap(), 2);
+    }
+
+    #[test]
+    fn test_max_fee_rate_defaults_to_1000_and_rejects_invalid_values() {
+        let sat_per_vb = |rate| FeeRate::from_sat_per_vb(rate).unwrap();
+        assert_eq!(resolve_max_fee_rate(None).unwrap(), sat_per_vb(1_000));
+        assert_eq!(resolve_max_fee_rate(Some(250)).unwrap(), sat_per_vb(250));
+        assert_eq!(
+            resolve_max_fee_rate(Some(1)).unwrap(),
+            FeeRate::BROADCAST_MIN
+        );
+        assert!(resolve_max_fee_rate(Some(0)).is_err());
+        assert!(resolve_max_fee_rate(Some(u64::MAX)).is_err());
+    }
+
+    #[test]
+    fn loads_configured_max_fee_rate() {
+        let root = tempdir().unwrap();
+        let config_file = root.path().join("config.toml");
+        write(
+            &config_file,
+            format!(
+                "{}max_fee_rate_sat_per_vb = 250\n",
+                profile_config("signet", "https://rpc.example.com")
+            ),
+        )
+        .unwrap();
+
+        let settings = Settings::load_from_paths(root.path().to_owned(), &config_file).unwrap();
+
+        assert_eq!(
+            settings.max_fee_rate,
+            FeeRate::from_sat_per_vb(250).unwrap()
+        );
+        assert_eq!(settings.recovery().max_fee_rate, settings.max_fee_rate);
     }
 
     #[test]

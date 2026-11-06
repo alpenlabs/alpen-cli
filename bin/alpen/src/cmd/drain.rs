@@ -11,7 +11,7 @@ use strata_cli_common::errors::{DisplayableError, DisplayedError};
 
 use crate::{
     alpen::AlpenWallet,
-    bitcoin::{BitcoinWallet, get_fee_rate},
+    bitcoin::{BitcoinWallet, FeeRateError, get_fee_rate},
     link::{OnchainObject, PrettyPrint},
     seed::Seed,
     settings::Settings,
@@ -29,7 +29,8 @@ pub struct DrainArgs {
     #[argh(option, short = 'r')]
     alpen_address: Option<String>,
 
-    /// override Bitcoin fee rate in sat/vbyte; the effective rate is at least 1
+    /// override Bitcoin fee rate in sat/vbyte; the effective rate is at least 1 and at most
+    /// max_fee_rate_sat_per_vb from the config (default 1000)
     #[argh(option)]
     fee_rate: Option<u64>,
 }
@@ -95,7 +96,13 @@ pub async fn drain(
                 "You have pending Bitcoin funds that won't be included in the drain".yellow()
             );
         }
-        let fee_rate = get_fee_rate(fee_rate, settings.bitcoin_backend.as_ref()).await;
+        let fee_rate = get_fee_rate(
+            fee_rate,
+            settings.max_fee_rate,
+            settings.bitcoin_backend.as_ref(),
+        )
+        .await
+        .map_err(FeeRateError::into_displayed_error)?;
         log_fee_rate(&fee_rate);
 
         let tx = build_drain(
@@ -156,6 +163,24 @@ mod tests {
             .unwrap();
 
         assert_eq!(args.bitcoin_address.as_deref(), Some("destination"));
+    }
+
+    #[test]
+    fn parses_fee_rate_option() {
+        let args = DrainArgs::from_args(&["alpen", "drain"], &["--fee-rate", "2000"]).unwrap();
+        assert_eq!(args.fee_rate, Some(2000));
+    }
+
+    #[test]
+    fn rejects_allow_high_fee_switch() {
+        // The fee-rate cap is only raised through `max_fee_rate_sat_per_vb` in the config.
+        assert!(
+            DrainArgs::from_args(
+                &["alpen", "drain"],
+                &["--fee-rate", "2000", "--allow-high-fee"],
+            )
+            .is_err()
+        );
     }
 
     #[test]

@@ -12,14 +12,16 @@ use progress::Progress;
 pub mod persist;
 
 use std::{
-    fmt::Debug,
+    fmt::{self, Debug},
     io::{self},
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use backend::{BitcoinBackend, ScanError, SyncError, UpdateError, WalletUpdate};
+use backend::{
+    BitcoinBackend, GetFeeRateError, InvalidFee, ScanError, SyncError, UpdateError, WalletUpdate,
+};
 use bdk_esplora::esplora_client::{self, AsyncClient};
 use bdk_wallet::{
     PersistedWallet, SignOptions, Wallet,
@@ -32,25 +34,108 @@ use bdk_wallet::{
 };
 use persist::Persister;
 use rusqlite::{self, Connection};
+use strata_cli_common::errors::DisplayedError;
 use terrors::OneOf;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
 use alpen_wallet_keys::BaseWallet;
 
+/// Why [`get_fee_rate`] refused to produce a fee rate.
+#[derive(Debug)]
+pub enum FeeRateError {
+    /// The backend estimate is above the configured cap. It is never clamped, since an estimate
+    /// that high points to a misbehaving or malicious backend.
+    EstimateAboveMax { estimate: FeeRate, max: FeeRate },
+    /// The user-supplied rate, in sat/vB, is above the configured cap.
+    UserRateAboveMax { sat_per_vb: u64, max: FeeRate },
+    /// The user-supplied rate, in sat/vB, does not fit in a [`FeeRate`].
+    UserRateOutOfRange(u64),
+    /// The backend could not produce an estimate.
+    Backend(OneOf<(InvalidFee, GetFeeRateError)>),
+}
+
+impl fmt::Display for FeeRateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EstimateAboveMax { estimate, max } => write!(
+                f,
+                "The Bitcoin backend estimated a fee rate of {} sat/vB, above the {} sat/vB cap. \
+                 Refusing to use it; pass a lower --fee-rate, or raise max_fee_rate_sat_per_vb in \
+                 the config to pay it",
+                estimate.to_sat_per_vb_ceil(),
+                max.to_sat_per_vb_floor()
+            ),
+            Self::UserRateAboveMax { sat_per_vb, max } => write!(
+                f,
+                "Fee rate of {sat_per_vb} sat/vB is above the {} sat/vB cap. Raise \
+                 max_fee_rate_sat_per_vb in the config to use it",
+                max.to_sat_per_vb_floor()
+            ),
+            Self::UserRateOutOfRange(sat_per_vb) => {
+                write!(f, "Fee rate of {sat_per_vb} sat/vB is out of range")
+            }
+            Self::Backend(_) => write!(
+                f,
+                "Failed to get a fee rate estimate from the Bitcoin backend"
+            ),
+        }
+    }
+}
+
+impl FeeRateError {
+    /// Converts into a [`DisplayedError`]. Only a backend failure counts as an internal error.
+    ///
+    /// This is a method rather than a `From` impl because a second `From` impl on
+    /// [`DisplayedError`] breaks type inference for `?` in closures that return it.
+    pub fn into_displayed_error(self) -> DisplayedError {
+        let msg = self.to_string();
+        match self {
+            Self::Backend(e) => DisplayedError::InternalError(msg, Box::new(e)),
+            err => DisplayedError::UserError(msg, Box::new(err)),
+        }
+    }
+}
+
+/// Picks the fee rate for a transaction: the user-supplied rate if there is one, otherwise the
+/// backend's next-block estimate, never below [`FeeRate::BROADCAST_MIN`].
+///
+/// A rate above `max_fee_rate` is rejected, not clamped, whether it came from the user or the
+/// backend. The cap is the user's `max_fee_rate_sat_per_vb` config setting, which defaults to
+/// [`DEFAULT_MAX_FEE_RATE`](constants::DEFAULT_MAX_FEE_RATE).
 pub async fn get_fee_rate(
     user_provided_sats_per_vb: Option<u64>,
+    max_fee_rate: FeeRate,
     bitcoin_backend: &dyn BitcoinBackend,
-) -> FeeRate {
+) -> Result<FeeRate, FeeRateError> {
     let fee_rate = match user_provided_sats_per_vb {
-        Some(fr) => FeeRate::from_sat_per_vb(fr).expect("valid fee rate"),
-        None => bitcoin_backend
-            .get_fee_rate(1)
-            .await
-            .expect("valid fee rate")
-            .unwrap_or(FeeRate::BROADCAST_MIN),
+        Some(sat_per_vb) => {
+            let fee_rate = FeeRate::from_sat_per_vb(sat_per_vb)
+                .ok_or(FeeRateError::UserRateOutOfRange(sat_per_vb))?;
+            if fee_rate > max_fee_rate {
+                return Err(FeeRateError::UserRateAboveMax {
+                    sat_per_vb,
+                    max: max_fee_rate,
+                });
+            }
+            fee_rate
+        }
+        None => {
+            let estimate = bitcoin_backend
+                .get_fee_rate(1)
+                .await
+                .map_err(FeeRateError::Backend)?
+                .unwrap_or(FeeRate::BROADCAST_MIN);
+            if estimate > max_fee_rate {
+                return Err(FeeRateError::EstimateAboveMax {
+                    estimate,
+                    max: max_fee_rate,
+                });
+            }
+            estimate
+        }
     };
 
-    fee_rate.max(FeeRate::BROADCAST_MIN)
+    Ok(fee_rate.max(FeeRate::BROADCAST_MIN))
 }
 
 /// Signs `psbt` with the caller-owned `signer`, then finalizes it against `wallet`'s descriptors.
@@ -101,10 +186,12 @@ pub(crate) mod tests {
     use alpen_wallet_keys::{SECP256K1, Seed};
 
     use super::{
-        BitcoinBackend, BitcoinWallet, DEFAULT_LOOKAHEAD, SyncError,
+        BitcoinBackend, BitcoinWallet, DEFAULT_LOOKAHEAD, FeeRateError, SyncError,
         backend::{BroadcastTxError, GetFeeRateError, InvalidFee, ScanError, UpdateSender},
+        constants::{DEFAULT_MAX_FEE_RATE, DEFAULT_MAX_FEE_RATE_SAT_PER_VB},
         get_fee_rate, lookahead_for_scan_state, scan_wallet, sign_psbt,
     };
+    use strata_cli_common::errors::DisplayedError;
 
     #[derive(Debug, Default)]
     pub(crate) struct TestBitcoinBackend {
@@ -158,14 +245,24 @@ pub(crate) mod tests {
         }
     }
 
+    fn sat_per_vb(rate: u64) -> FeeRate {
+        FeeRate::from_sat_per_vb(rate).unwrap()
+    }
+
+    fn backend_estimating(rate: FeeRate) -> TestBitcoinBackend {
+        TestBitcoinBackend {
+            fee_rate: Some(rate),
+            ..Default::default()
+        }
+    }
+
     #[tokio::test]
     async fn test_get_fee_rate_clamps_backend_zero_to_broadcast_minimum() {
-        let backend = TestBitcoinBackend {
-            fee_rate: Some(FeeRate::ZERO),
-            ..Default::default()
-        };
+        let backend = backend_estimating(FeeRate::ZERO);
 
-        let fee_rate = get_fee_rate(None, &backend).await;
+        let fee_rate = get_fee_rate(None, DEFAULT_MAX_FEE_RATE, &backend)
+            .await
+            .unwrap();
 
         assert_eq!(fee_rate, FeeRate::BROADCAST_MIN);
     }
@@ -174,7 +271,9 @@ pub(crate) mod tests {
     async fn test_get_fee_rate_uses_broadcast_minimum_when_backend_has_no_estimate() {
         let backend = TestBitcoinBackend::default();
 
-        let fee_rate = get_fee_rate(None, &backend).await;
+        let fee_rate = get_fee_rate(None, DEFAULT_MAX_FEE_RATE, &backend)
+            .await
+            .unwrap();
 
         assert_eq!(fee_rate, FeeRate::BROADCAST_MIN);
     }
@@ -183,9 +282,190 @@ pub(crate) mod tests {
     async fn test_get_fee_rate_clamps_user_zero_to_broadcast_minimum() {
         let backend = TestBitcoinBackend::default();
 
-        let fee_rate = get_fee_rate(Some(0), &backend).await;
+        let fee_rate = get_fee_rate(Some(0), DEFAULT_MAX_FEE_RATE, &backend)
+            .await
+            .unwrap();
 
         assert_eq!(fee_rate, FeeRate::BROADCAST_MIN);
+    }
+
+    #[test]
+    fn default_max_fee_rate_matches_sat_per_vb_constant() {
+        assert_eq!(
+            DEFAULT_MAX_FEE_RATE,
+            sat_per_vb(DEFAULT_MAX_FEE_RATE_SAT_PER_VB)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_fee_rate_accepts_backend_estimate_at_cap() {
+        let backend = backend_estimating(DEFAULT_MAX_FEE_RATE);
+
+        let fee_rate = get_fee_rate(None, DEFAULT_MAX_FEE_RATE, &backend)
+            .await
+            .unwrap();
+
+        assert_eq!(fee_rate, DEFAULT_MAX_FEE_RATE);
+    }
+
+    #[tokio::test]
+    async fn test_get_fee_rate_rejects_backend_estimate_above_cap() {
+        let above_max = sat_per_vb(DEFAULT_MAX_FEE_RATE_SAT_PER_VB + 1);
+        let backend = backend_estimating(above_max);
+
+        let err = get_fee_rate(None, DEFAULT_MAX_FEE_RATE, &backend)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            FeeRateError::EstimateAboveMax { estimate, max }
+                if estimate == above_max && max == DEFAULT_MAX_FEE_RATE
+        ));
+        assert!(matches!(
+            err.into_displayed_error(),
+            DisplayedError::UserError(msg, _)
+                if msg.contains("max_fee_rate_sat_per_vb")
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_get_fee_rate_accepts_user_rate_at_cap() {
+        let backend = TestBitcoinBackend::default();
+
+        let fee_rate = get_fee_rate(
+            Some(DEFAULT_MAX_FEE_RATE_SAT_PER_VB),
+            DEFAULT_MAX_FEE_RATE,
+            &backend,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(fee_rate, DEFAULT_MAX_FEE_RATE);
+    }
+
+    #[tokio::test]
+    async fn test_get_fee_rate_rejects_user_rate_above_cap_without_override() {
+        let backend = TestBitcoinBackend::default();
+        let above_max = DEFAULT_MAX_FEE_RATE_SAT_PER_VB + 1;
+
+        let err = get_fee_rate(Some(above_max), DEFAULT_MAX_FEE_RATE, &backend)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            FeeRateError::UserRateAboveMax { sat_per_vb, max }
+                if sat_per_vb == above_max && max == DEFAULT_MAX_FEE_RATE
+        ));
+        assert!(matches!(
+            err.into_displayed_error(),
+            DisplayedError::UserError(msg, _) if msg.contains("max_fee_rate_sat_per_vb")
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_get_fee_rate_enforces_configured_cap() {
+        let max = sat_per_vb(50);
+
+        let backend = backend_estimating(sat_per_vb(50));
+        assert_eq!(get_fee_rate(None, max, &backend).await.unwrap(), max);
+        assert_eq!(get_fee_rate(Some(50), max, &backend).await.unwrap(), max);
+
+        let backend = backend_estimating(sat_per_vb(51));
+        assert!(matches!(
+            get_fee_rate(None, max, &backend).await,
+            Err(FeeRateError::EstimateAboveMax { max: reported, .. }) if reported == max
+        ));
+        assert!(matches!(
+            get_fee_rate(Some(51), max, &backend).await,
+            Err(FeeRateError::UserRateAboveMax { sat_per_vb: 51, .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_get_fee_rate_allows_rates_above_default_when_cap_is_raised() {
+        let max = sat_per_vb(60_000);
+        let backend = backend_estimating(sat_per_vb(50_000));
+
+        assert_eq!(
+            get_fee_rate(None, max, &backend).await.unwrap(),
+            sat_per_vb(50_000)
+        );
+        // The backend estimate must not be consulted when the user supplies a rate.
+        assert_eq!(
+            get_fee_rate(Some(5_000), max, &backend).await.unwrap(),
+            sat_per_vb(5_000)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_fee_rate_rejects_unrepresentable_user_rate() {
+        let backend = TestBitcoinBackend::default();
+
+        let err = get_fee_rate(Some(u64::MAX), DEFAULT_MAX_FEE_RATE, &backend)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, FeeRateError::UserRateOutOfRange(u64::MAX)));
+    }
+
+    #[tokio::test]
+    async fn test_get_fee_rate_reports_backend_failure_as_error() {
+        #[derive(Debug, Default)]
+        struct InvalidFeeBackend(TestBitcoinBackend);
+
+        #[async_trait]
+        impl BitcoinBackend for InvalidFeeBackend {
+            async fn scan_scripts(
+                &self,
+                scripts: Vec<ScriptBuf>,
+                last_cp: CheckPoint,
+            ) -> Result<HashSet<ScriptBuf>, ScanError> {
+                self.0.scan_scripts(scripts, last_cp).await
+            }
+
+            async fn sync_wallet(
+                &self,
+                req: SyncRequestBuilder<(KeychainKind, u32)>,
+                last_cp: CheckPoint,
+                send_update: UpdateSender,
+            ) -> Result<(), SyncError> {
+                self.0.sync_wallet(req, last_cp, send_update).await
+            }
+
+            async fn scan_wallet(
+                &self,
+                req: FullScanRequestBuilder<KeychainKind>,
+                last_cp: CheckPoint,
+                send_update: UpdateSender,
+                stop_gap: usize,
+            ) -> Result<(), ScanError> {
+                self.0
+                    .scan_wallet(req, last_cp, send_update, stop_gap)
+                    .await
+            }
+
+            async fn broadcast_tx(&self, tx: &Transaction) -> Result<(), BroadcastTxError> {
+                self.0.broadcast_tx(tx).await
+            }
+
+            async fn get_fee_rate(
+                &self,
+                _target: u16,
+            ) -> Result<Option<FeeRate>, OneOf<(InvalidFee, GetFeeRateError)>> {
+                Err(OneOf::new(InvalidFee))
+            }
+        }
+
+        let err = get_fee_rate(None, DEFAULT_MAX_FEE_RATE, &InvalidFeeBackend::default())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err.into_displayed_error(),
+            DisplayedError::InternalError(..)
+        ));
     }
 
     #[test]

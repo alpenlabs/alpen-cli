@@ -75,7 +75,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        bitcoin::persist::set_data_dir, constants::SEED_LEN, seed::Seed, settings::Settings,
+        bitcoin::persist::set_data_dir, constants::SEED_LEN, recovery::DescriptorRecovery,
+        seed::Seed, settings::Settings,
     };
 
     use alpen_bitcoin_wallet::backend::{
@@ -92,6 +93,7 @@ mod tests {
         },
     };
     use std::collections::HashSet;
+    use strata_cli_common::errors::DisplayedError;
     use terrors::OneOf;
     #[derive(Debug)]
     pub(crate) struct TestBitcoinBackend {
@@ -189,6 +191,65 @@ mod tests {
         recover::recover(args, seed(), load_settings())
             .await
             .unwrap();
+
+        // A --fee-rate above the default 1000 sat/vB cap is rejected until the config raises
+        // the cap.
+        let args = RecoverArgs::from_args(&["alpen", "recover"], &["--fee-rate", "1001"]).unwrap();
+        assert!(matches!(
+            recover::recover(args, seed(), load_settings()).await,
+            Err(DisplayedError::UserError(..))
+        ));
+        let mut settings = load_settings();
+        settings.max_fee_rate = FeeRate::from_sat_per_vb(2_000).unwrap();
+        let args = RecoverArgs::from_args(&["alpen", "recover"], &["--fee-rate", "1001"]).unwrap();
+        recover::recover(args, seed(), settings).await.unwrap();
+
+        // A lowered cap is enforced too.
+        let mut settings = load_settings();
+        settings.max_fee_rate = FeeRate::from_sat_per_vb(100).unwrap();
+        let args = RecoverArgs::from_args(&["alpen", "recover"], &["--fee-rate", "101"]).unwrap();
+        assert!(matches!(
+            recover::recover(args, seed(), settings).await,
+            Err(DisplayedError::UserError(..))
+        ));
+
+        // A backend estimate above the cap is rejected, not clamped, unless the config raises
+        // the cap.
+        let high_estimate_backend = Arc::new(TestBitcoinBackend {
+            fee_rate: FeeRate::from_sat_per_vb(50_000),
+        });
+        let settings_with_high_estimate = |max_sat_per_vb| {
+            let mut settings = load_settings();
+            settings.bitcoin_backend = high_estimate_backend.clone();
+            settings.max_fee_rate = FeeRate::from_sat_per_vb(max_sat_per_vb).unwrap();
+            settings
+        };
+        let args = RecoverArgs::from_args(&["alpen", "recover"], &[]).unwrap();
+        assert!(matches!(
+            recover::recover(args, seed(), settings_with_high_estimate(1_000)).await,
+            Err(DisplayedError::UserError(..))
+        ));
+        let args = RecoverArgs::from_args(&["alpen", "recover"], &[]).unwrap();
+        recover::recover(args, seed(), settings_with_high_estimate(50_000))
+            .await
+            .unwrap();
+
+        // A deposit rejected for its fee rate must not reserve a reclaim counter.
+        let reclaim_counter = || async {
+            DescriptorRecovery::open(&seed(), &load_settings().descriptor_db)
+                .await
+                .expect("descriptor recovery should open")
+                .current_reclaim_counter()
+                .expect("reclaim counter should be readable")
+        };
+        let counter_before = reclaim_counter().await;
+        let args = DepositArgs::from_args(&["alpen", "deposit"], &["--fee-rate", "1001"]).unwrap();
+        assert!(matches!(
+            deposit::deposit(args, seed(), load_settings()).await,
+            Err(DisplayedError::UserError(..))
+        ));
+        assert_eq!(reclaim_counter().await, counter_before);
+
         let args = DepositArgs::from_args(&["alpen", "deposit"], &[]).unwrap();
         assert!(
             deposit::deposit(args, seed(), load_settings())
