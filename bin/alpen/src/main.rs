@@ -18,8 +18,8 @@ use alpen_cli as _;
 use bitcoin::persist::set_data_dir;
 use cmd::{
     Commands, TopLevel, backup::backup, balance::balance, config::config, deposit::deposit,
-    drain::drain, network::network, receive::receive, recover::recover, scan::scan, send::send,
-    withdraw::withdraw,
+    drain::drain, faucet::faucet, network::network, receive::receive, recover::recover, scan::scan,
+    send::send, withdraw::withdraw,
 };
 use cmd::{change_pwd::change_pwd, reset::reset};
 use seed::KeychainPersister;
@@ -73,6 +73,7 @@ async fn main() {
         Commands::Backup(_) => backup(seed).await,
         Commands::Deposit(args) => deposit(args, seed, settings).await,
         Commands::Withdraw(args) => withdraw(args, seed, settings).await,
+        Commands::Faucet(args) => faucet(args, seed, settings).await,
         Commands::Send(args) => send(args, seed, settings).await,
         Commands::Receive(args) => receive(args, seed, settings).await,
         Commands::ChangePwd(args) => change_pwd(args, seed, KeychainPersister).await,
