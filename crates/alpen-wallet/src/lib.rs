@@ -12,6 +12,21 @@ use strata_cli_common::errors::{DisplayableError, DisplayedError};
 /// Number of wei corresponding to one satoshi.
 pub const SATS_TO_WEI: u128 = ETH_TO_WEI / 100_000_000;
 
+/// User-provided EIP-1559 fee limits, denominated in wei per gas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Eip1559Fees {
+    pub max_fee_per_gas: u128,
+    pub max_priority_fee_per_gas: u128,
+}
+
+impl Eip1559Fees {
+    /// Applies the fee limits to a transaction request.
+    pub fn apply(self, tx: TransactionRequest) -> TransactionRequest {
+        tx.with_max_fee_per_gas(self.max_fee_per_gas)
+            .with_max_priority_fee_per_gas(self.max_priority_fee_per_gas)
+    }
+}
+
 use std::ops::{Deref, DerefMut};
 
 use alloy::{
@@ -90,14 +105,39 @@ impl AlpenWallet {
     }
 
     /// Broadcasts a transfer of the requested number of satoshis.
-    pub async fn send(&self, address: Address, amount_sats: u64) -> Result<B256, DisplayedError> {
-        let tx = TransactionRequest::default()
+    pub async fn send(
+        &self,
+        address: Address,
+        amount_sats: u64,
+        fees: Option<Eip1559Fees>,
+    ) -> Result<B256, DisplayedError> {
+        let mut tx = TransactionRequest::default()
             .with_to(address)
             .with_value(U256::from(amount_sats as u128 * SATS_TO_WEI));
+        if let Some(fees) = fees {
+            tx = fees.apply(tx);
+        }
         let res = self
             .send_transaction(tx)
             .await
             .internal_error("Failed to broadcast Alpen transaction")?;
         Ok(*res.tx_hash())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn eip1559_fees_are_applied_to_transaction() {
+        let tx = Eip1559Fees {
+            max_fee_per_gas: 3_000_000_000,
+            max_priority_fee_per_gas: 1_000_000_000,
+        }
+        .apply(TransactionRequest::default());
+
+        assert_eq!(tx.max_fee_per_gas, Some(3_000_000_000));
+        assert_eq!(tx.max_priority_fee_per_gas, Some(1_000_000_000));
     }
 }
