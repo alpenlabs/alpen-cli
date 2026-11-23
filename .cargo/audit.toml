@@ -20,4 +20,20 @@ ignore = [
   # for alloy-primitives in https://github.com/alloy-rs/core/pull/1147). Remove
   # this entry once alloy-signer and alloy-primitives depend on k256 0.14.
   "RUSTSEC-2026-0387",
+
+  # libsqlite3-sys 0.28.0 bundles SQLite < 3.54.0 (CVE-2026-119375), which can
+  # return uninitialized page-cache memory when opening a database file together
+  # with a sibling `-wal` file whose page size differs. Fixed in libsqlite3-sys
+  # >= 0.39.0 (rusqlite >= 0.41.0). It comes in through rusqlite 0.31.0, which
+  # is required by bdk_chain 0.23.3 (and latest 0.23.4, `rusqlite = "^0.31.0"`
+  # with `bundled`) via bdk_wallet 3.2.0 (latest). The lockfile cannot pick up
+  # the fix until bdk_chain / bdk_wallet upgrade to rusqlite >= 0.41.
+  #
+  # Exposure: exploiting this requires a local attacker who can write a crafted
+  # SQLite database and sibling `-wal` file that the CLI opens. The CLI only
+  # opens its own local wallet database and never opens untrusted external
+  # SQLite databases.
+  #
+  # Remove this entry once bdk_wallet / bdk_chain depend on rusqlite >= 0.41.
+  "RUSTSEC-2026-0459",
 ]
