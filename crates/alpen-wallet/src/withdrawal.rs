@@ -5,7 +5,7 @@ use alloy::{
     primitives::{Address, U256},
     rpc::types::{TransactionInput, TransactionRequest},
 };
-use alpen_reth_primitives::WithdrawalCalldata;
+use alpen_primitives::WithdrawalCalldata;
 use bdk_wallet::bitcoin::Amount;
 use strata_bridge_params::BridgeParams;
 use strata_cli_common::errors::DisplayedError;

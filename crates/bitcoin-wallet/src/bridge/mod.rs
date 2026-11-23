@@ -167,13 +167,15 @@ mod tests {
         create_deposit_request_locking_script, parse_drt,
     };
     use strata_primitives::constants::RECOVER_DELAY;
-    use strata_test_utils_btcio::BtcioTestHarness;
 
     use super::*;
-    use crate::recover::{create_recovery_wallet, reclaim_condition};
+    use crate::{
+        recover::{create_recovery_wallet, reclaim_condition},
+        test_utils::RegtestHarness,
+    };
 
-    /// Populate the wallet with on-chain data by replaying blocks from the corepc node.
-    fn sync_wallet_from_node(wallet: &mut Wallet, harness: &BtcioTestHarness) {
+    /// Populate the wallet with on-chain data by replaying blocks from the bitcoind node.
+    fn sync_wallet_from_node(wallet: &mut Wallet, harness: &RegtestHarness) {
         let node = harness.bitcoind();
         let tip_height = node.client.get_block_count().expect("block count").0;
         for height in 1..=tip_height {
@@ -242,8 +244,7 @@ mod tests {
         let alpen_address = AlpenAddress::from_str("0x5400000000000000000000000000000000000001")
             .expect("valid Alpen address");
 
-        let harness =
-            BtcioTestHarness::new_with_coinbase_maturity().expect("bitcoind harness should start");
+        let harness = RegtestHarness::new_with_coinbase_maturity();
 
         let xpriv = Xpriv::new_master(Network::Regtest, &[0u8; 32]).expect("valid xpriv");
         let base_desc = format!("tr({xpriv}/86h/0h/0h");
@@ -260,9 +261,7 @@ mod tests {
         node.client
             .send_to_address(&fund_address, Amount::from_sat(500_000))
             .expect("funding transaction should be created");
-        harness
-            .mine_blocks_blocking(1, None)
-            .expect("block should be mined");
+        harness.mine_blocks(1);
         sync_wallet_from_node(&mut wallet, &harness);
 
         let bridge_in_amount = Amount::from_sat(100_000);
@@ -329,9 +328,7 @@ mod tests {
         node.client
             .send_raw_transaction(&tx)
             .expect("signed deposit should be accepted by Bitcoin Core");
-        harness
-            .mine_blocks_blocking(usize::from(RECOVER_DELAY), None)
-            .expect("recovery delay should elapse");
+        harness.mine_blocks(usize::from(RECOVER_DELAY));
         let (mut recovery_wallet, reclaim_signer) =
             create_recovery_wallet(bridge_in_desc, Network::Regtest)
                 .expect("valid recovery wallet");
