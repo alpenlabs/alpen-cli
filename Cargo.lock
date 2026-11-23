@@ -790,7 +790,7 @@ dependencies = [
  "sled",
  "strata-asm-proto-bridge-txs",
  "strata-cli-common",
- "strata-codec",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.5.0)",
  "strata-identifiers",
  "strata-l1-txfmt",
  "strata-ol-bridge-types",
@@ -5656,7 +5656,7 @@ dependencies = [
  "ssz",
  "ssz_derive",
  "strata-btc-types",
- "strata-codec",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "strata-crypto",
  "strata-identifiers",
  "thiserror",
@@ -5695,7 +5695,7 @@ dependencies = [
  "ssz_derive",
  "ssz_primitives",
  "ssz_types",
- "strata-codec",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "strata-crypto",
  "strata-identifiers",
  "strata-msg-fmt",
@@ -5715,7 +5715,7 @@ dependencies = [
  "strata-asm-bridge-types",
  "strata-asm-common",
  "strata-btc-types",
- "strata-codec",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "strata-crypto",
  "strata-l1-txfmt",
  "thiserror",
@@ -5766,7 +5766,7 @@ dependencies = [
  "ssz_derive",
  "ssz_primitives",
  "ssz_types",
- "strata-codec",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "strata-identifiers",
  "thiserror",
  "tree_hash",
@@ -5806,6 +5806,14 @@ version = "0.1.0"
 source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
 dependencies = [
  "strata-codec-derive",
+ "thiserror",
+]
+
+[[package]]
+name = "strata-codec"
+version = "0.1.0"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.5.0#24b3319fe331d19032923f22b9ad98c8094056e0"
+dependencies = [
  "thiserror",
 ]
 
@@ -5858,7 +5866,7 @@ dependencies = [
  "ssz_derive",
  "ssz_primitives",
  "ssz_types",
- "strata-codec",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "tree_hash",
  "zeroize",
 ]
@@ -5887,7 +5895,7 @@ dependencies = [
  "ssz_derive",
  "ssz_primitives",
  "ssz_types",
- "strata-codec",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "thiserror",
  "tree_hash",
  "tree_hash_derive",
@@ -5908,7 +5916,7 @@ source = "git+https://github.com/alpenlabs/alpen.git?tag=v0.4.0-rc.1#d65b7cc8945
 dependencies = [
  "arbitrary",
  "strata-asm-bridge-types",
- "strata-codec",
+ "strata-codec 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "strata-identifiers",
  "thiserror",
 ]
@@ -6031,7 +6039,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.60.2",
