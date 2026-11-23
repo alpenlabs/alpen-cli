@@ -37,25 +37,24 @@ alpen-wallet = { path = "crates/alpen-wallet" }
 alpen-wallet-keys = { path = "crates/keys" }
 alpen-wallet-keystore = { path = "crates/keystore" }
 
-# Alpen execution types. alpen-ee v0.4.0-rc.3 builds on the Alpen, ASM and
+# Alpen execution types. alpen-ee v0.5.1 builds on the Alpen, ASM and
 # strata-common tags below, so keep these references identical to share types.
-alpen-reth-primitives = { git = "https://github.com/alpenlabs/alpen-ee", tag = "v0.4.0-rc.3" }
+alpen-primitives = { git = "https://github.com/alpenlabs/alpen-ee", tag = "v0.5.1" }
 
 # Shared Alpen crates.
-strata-bridge-params = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.4.0-rc.1" }
-strata-cli-common = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.4.0-rc.1" }
-strata-ol-bridge-types = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.4.0-rc.1" }
-strata-primitives = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.4.0-rc.1" }
-strata-test-utils-btcio = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.4.0-rc.1" }
+strata-bridge-params = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.6.0" }
+strata-cli-common = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.6.0" }
+strata-ol-bridge-types = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.6.0" }
+strata-primitives = { git = "https://github.com/alpenlabs/alpen.git", tag = "v0.6.0" }
 
 # Strata protocol crates.
-strata-asm-proto-bridge-txs = { git = "https://github.com/alpenlabs/asm", tag = "v0.4.0" }
+strata-asm-proto-bridge-txs = { git = "https://github.com/alpenlabs/asm", tag = "v0.6.1" }
 # Match ASM's VarVec type for the encoded deposit destination.
-strata-codec = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.4.0" }
+strata-codec = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.6.0" }
 # Keep identifiers aligned with strata-ol-bridge-types' deposit descriptor.
-strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.4.0" }
+strata-identifiers = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.6.0" }
 # Match ASM's TagData type when encoding the deposit-request script.
-strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.4.0" }
+strata-l1-txfmt = { git = "https://github.com/alpenlabs/strata-common", tag = "v0.6.0" }
 
 # Third-party dependencies inherited by the CLI crate.
 aes-gcm-siv = "0.11.1"
@@ -72,6 +71,7 @@ bdk_wallet = "3.2.0"
 bip39 = { version = "3.0.0", features = ["all-languages", "zeroize"] }
 # Randomize secp256k1 contexts without relying on BDK's feature selection.
 bitcoin = { version = "0.32.102", features = ["rand-std"] }
+bitcoind = { version = "0.44.0", features = ["31_1"] }
 chrono = "0.4.44"
 colored = "3.1.1"
 config = { version = "0.15.24", default-features = false, features = ["toml"] }

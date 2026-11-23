@@ -468,11 +468,11 @@ pub struct InvalidFee;
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
-    use strata_test_utils_btcio::BtcioTestHarness;
 
     use bdk_wallet::bitcoin::{Amount, TxOut, absolute, transaction};
 
     use super::*;
+    use crate::test_utils::RegtestHarness;
 
     #[test]
     fn record_used_scripts_only_returns_requested_outputs() {
@@ -509,7 +509,7 @@ mod tests {
         use bdk_bitcoind_rpc::bitcoincore_rpc::{Auth, Client};
         use bdk_wallet::{Wallet, bitcoin::Network, chain::BlockId};
 
-        let harness = BtcioTestHarness::new_with_coinbase_maturity().expect("Bitcoin node");
+        let harness = RegtestHarness::new_with_coinbase_maturity();
         let node = harness.bitcoind();
         let cookie = node.params.get_cookie_values().unwrap().unwrap();
         let client = Client::new(
@@ -536,7 +536,7 @@ mod tests {
         let address = wallet.reveal_next_address(KeychainKind::External).address;
         let amount = Amount::from_sat(500_000);
         node.client.send_to_address(&address, amount).unwrap();
-        harness.mine_blocks_blocking(1, None).unwrap();
+        harness.mine_blocks(1);
 
         let script = address.script_pubkey();
         let used = backend

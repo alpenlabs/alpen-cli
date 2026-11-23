@@ -35,7 +35,7 @@ alloy = { workspace = true, features = [
   "providers",
   "rpc-types",
 ] }
-alpen-reth-primitives.workspace = true
+alpen-primitives.workspace = true
 bdk_wallet.workspace = true
 strata-bridge-params.workspace = true
 strata-cli-common.workspace = true

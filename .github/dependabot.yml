@@ -33,6 +33,14 @@ updates:
     # Cooldown
     cooldown:
       default-days: 14
+    # Alpen and Strata git dependencies (alpen-ee, alpen, asm, strata-common)
+    # share types across crates and must be bumped together to a matched tag
+    # set. Dependabot also only updates Cargo.lock without updating git tags in
+    # Cargo.toml, which breaks --locked CI builds. Ignore them and bump the
+    # family deliberately instead.
+    ignore:
+      - dependency-name: "alpen-primitives"
+      - dependency-name: "strata-*"
     # Group non-security updates
     groups:
       rust-dependencies:

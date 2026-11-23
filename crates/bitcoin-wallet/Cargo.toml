@@ -54,4 +54,4 @@ tokio.workspace = true
 [target.'cfg(target_env = "musl")'.dependencies]
 rusqlite = { workspace = true, features = ["bundled"] }
 [dev-dependencies]
-strata-test-utils-btcio.workspace = true
+bitcoind.workspace = true

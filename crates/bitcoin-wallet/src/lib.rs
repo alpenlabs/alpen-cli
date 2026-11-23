@@ -10,6 +10,8 @@ pub mod backend;
 pub mod progress;
 use progress::Progress;
 pub mod persist;
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 use std::{
     fmt::{self, Debug},
