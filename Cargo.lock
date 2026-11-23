@@ -792,7 +792,7 @@ dependencies = [
  "strata-cli-common",
  "strata-codec",
  "strata-identifiers",
- "strata-l1-txfmt",
+ "strata-l1-txfmt 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.5.0)",
  "strata-ol-bridge-types",
  "strata-primitives",
  "strata-test-utils-btcio",
@@ -826,7 +826,7 @@ dependencies = [
  "shrex",
  "strata-bridge-params",
  "strata-cli-common",
- "strata-l1-txfmt",
+ "strata-l1-txfmt 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.5.0)",
  "strata-primitives",
  "tempfile",
  "terrors",
@@ -5676,7 +5676,7 @@ dependencies = [
  "strata-btc-types",
  "strata-btc-verification",
  "strata-identifiers",
- "strata-l1-txfmt",
+ "strata-l1-txfmt 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "strata-merkle",
  "strata-msg-fmt",
  "thiserror",
@@ -5717,7 +5717,7 @@ dependencies = [
  "strata-btc-types",
  "strata-codec",
  "strata-crypto",
- "strata-l1-txfmt",
+ "strata-l1-txfmt 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "thiserror",
 ]
 
@@ -5735,7 +5735,7 @@ dependencies = [
  "strata-asm-manifest-types",
  "strata-btc-verification",
  "strata-identifiers",
- "strata-l1-txfmt",
+ "strata-l1-txfmt 0.1.0 (git+https://github.com/alpenlabs/strata-common?tag=v0.4.0)",
  "strata-merkle",
  "tree_hash",
  "tree_hash_derive",
@@ -5867,6 +5867,17 @@ dependencies = [
 name = "strata-l1-txfmt"
 version = "0.1.0"
 source = "git+https://github.com/alpenlabs/strata-common?tag=v0.4.0#fc71f121d8990af0e56c2da436754b0b1fd304e0"
+dependencies = [
+ "arbitrary",
+ "bitcoin",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "strata-l1-txfmt"
+version = "0.1.0"
+source = "git+https://github.com/alpenlabs/strata-common?tag=v0.5.0#24b3319fe331d19032923f22b9ad98c8094056e0"
 dependencies = [
  "arbitrary",
  "bitcoin",
@@ -6031,7 +6042,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.60.2",
